@@ -40,7 +40,7 @@ Requires macOS 14 (Sonoma) or later and Xcode 15+.
 
 ```bash
 # clone
-git clone https://github.com/<you>/macbroom.git
+git clone https://github.com/ijuanlux/macbroom.git
 cd macbroom
 
 # project is generated from project.yml — install xcodegen once
