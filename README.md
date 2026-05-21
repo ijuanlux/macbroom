@@ -1,8 +1,26 @@
-# MacBroom
+<p align="center">
+  <img src="docs/icon.png" width="200" alt="MacBroom icon — a rainbow-striped apple with a broom" />
+</p>
 
-A free, open-source Mac cleanup app with rainbow stripes, a tiny broom and zero paywall.
+<h1 align="center">MacBroom</h1>
 
-Built because CleanMyMac shouldn't cost €35/year for stuff macOS could do itself.
+<p align="center">
+  A free, open-source Mac cleanup app — rainbow stripes, a tiny broom, zero paywall.<br />
+  <em>Built because CleanMyMac shouldn't cost €35/year for stuff macOS could do itself.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/ijuanlux/macbroom/releases/latest">
+    <img src="https://img.shields.io/github/v/release/ijuanlux/macbroom?display_name=tag&sort=semver&color=ff9148" alt="Latest release" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-3aa54e" alt="License: MIT" />
+  </a>
+  <img src="https://img.shields.io/badge/macOS-14%2B-2e8edb" alt="macOS 14+" />
+  <img src="https://img.shields.io/badge/Swift-5.10-e84d44" alt="Swift 5.10" />
+</p>
+
+---
 
 ## Features
 
