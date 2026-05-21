@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MacBroom — a free Mac cleaner</title>
+  <meta name="description" content="The free, open-source cleaner for your Mac. Smart Scan, dev junk, duplicates, RAM purge, treemap and a hacker mode." />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #fdf7eb;
+      --fg: #1a1a1a;
+      --muted: #555;
+      --stripe-green:  #66bd5c;
+      --stripe-yellow: #fac733;
+      --stripe-orange: #f58c2e;
+      --stripe-red:    #e84d44;
+      --stripe-purple: #9c57b5;
+      --stripe-blue:   #2e8edb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f0f12; --fg: #f5f5f5; --muted: #aaa; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+    }
+    .hero {
+      text-align: center;
+      padding: 80px 20px 40px;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .icon-wrapper {
+      width: 160px;
+      height: 160px;
+      margin: 0 auto 28px;
+      border-radius: 36px;
+      background: linear-gradient(135deg, #fdf7eb, #f2e6cf);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.18);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .apple {
+      width: 88px;
+      height: 100px;
+      background: linear-gradient(
+        180deg,
+        var(--stripe-green)  0% 16.6%,
+        var(--stripe-yellow) 16.6% 33.3%,
+        var(--stripe-orange) 33.3% 50%,
+        var(--stripe-red)    50% 66.6%,
+        var(--stripe-purple) 66.6% 83.3%,
+        var(--stripe-blue)   83.3% 100%
+      );
+      border-radius: 50% / 45% 45% 55% 55%;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.18);
+    }
+    .leaf {
+      position: absolute;
+      width: 14px; height: 26px;
+      background: linear-gradient(180deg, #5aa84a, #336b22);
+      border-radius: 50% 50% 50% 50% / 90% 10% 90% 10%;
+      top: 18px; left: 50%;
+      transform: translateX(-50%) rotate(28deg);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
+    }
+    h1 {
+      font-size: 48px;
+      margin: 0 0 12px;
+      background: linear-gradient(
+        90deg,
+        var(--stripe-green), var(--stripe-yellow), var(--stripe-orange),
+        var(--stripe-red), var(--stripe-purple), var(--stripe-blue)
+      );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .tagline {
+      font-size: 20px;
+      color: var(--muted);
+      margin: 0 0 24px;
+    }
+    .cta-row {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-block;
+      padding: 12px 22px;
+      border-radius: 24px;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 15px;
+      transition: transform 0.12s ease;
+    }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-primary {
+      color: white;
+      background: linear-gradient(
+        90deg,
+        var(--stripe-green), var(--stripe-yellow), var(--stripe-orange),
+        var(--stripe-red), var(--stripe-purple), var(--stripe-blue)
+      );
+      box-shadow: 0 8px 20px rgba(255, 140, 50, 0.35);
+    }
+    .btn-secondary {
+      color: var(--fg);
+      background: rgba(0,0,0,0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      .btn-secondary { background: rgba(255,255,255,0.08); }
+    }
+    .features {
+      max-width: 980px;
+      margin: 40px auto 80px;
+      padding: 0 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .feature {
+      padding: 18px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(0,0,0,0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      .feature { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+    }
+    .feature h3 { margin: 0 0 6px; font-size: 15px; }
+    .feature p  { margin: 0; font-size: 13px; color: var(--muted); }
+    footer {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    footer a { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <section class="hero">
+    <div class="icon-wrapper">
+      <div class="apple"></div>
+      <div class="leaf"></div>
+    </div>
+    <h1>MacBroom</h1>
+    <p class="tagline">Free, open-source Mac cleaner. Built for the community.</p>
+    <div class="cta-row">
+      <a href="https://github.com/&lt;you&gt;/macbroom/releases" class="btn btn-primary">Download</a>
+      <a href="https://github.com/&lt;you&gt;/macbroom" class="btn btn-secondary">View on GitHub</a>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feature">
+      <h3>🧹 Smart Scan</h3>
+      <p>One click sweeps caches and developer junk in parallel. Shows GB you can reclaim.</p>
+    </div>
+    <div class="feature">
+      <h3>🗑️ App Uninstaller</h3>
+      <p>Removes apps and their leftover files in <code>~/Library</code>. Quits running apps automatically.</p>
+    </div>
+    <div class="feature">
+      <h3>📦 Duplicate finder</h3>
+      <p>SHA-256 hashes catch identical files anywhere. Keep newest, trash the rest.</p>
+    </div>
+    <div class="feature">
+      <h3>🔍 Disk Explorer</h3>
+      <p>Treemap of any folder. Click to drill in. See what's actually eating your disk.</p>
+    </div>
+    <div class="feature">
+      <h3>🧠 Memory cleaner</h3>
+      <p>Live RAM breakdown. One-click <code>purge</code> with admin auth.</p>
+    </div>
+    <div class="feature">
+      <h3>🛠️ Maintenance</h3>
+      <p>Flush DNS, rebuild Spotlight, repair fonts, force-empty Trash. Everything OnyX does.</p>
+    </div>
+    <div class="feature">
+      <h3>🟢 Hacker Mode</h3>
+      <p>Matrix rain, terminal UI, ASCII art. Toggle a global green-on-black monospace theme.</p>
+    </div>
+    <div class="feature">
+      <h3>⌨️ Cmd+K palette</h3>
+      <p>Raycast-style fuzzy launcher for every action in the app.</p>
+    </div>
+    <div class="feature">
+      <h3>🍎 100% free</h3>
+      <p>MIT licensed. No telemetry. No paywall. Read the source.</p>
+    </div>
+  </section>
+
+  <footer>
+    Built with Swift + SwiftUI · <a href="https://github.com/&lt;you&gt;/macbroom">Source on GitHub</a>
+  </footer>
+</body>
+</html>

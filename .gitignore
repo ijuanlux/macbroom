@@ -1,0 +1,25 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+
+# Generated project (we keep project.yml as source of truth)
+MacBroom.xcodeproj/
+
+# macOS
+.DS_Store
+*.icloud
+
+# Swift
+.build/
+Packages/
+Package.resolved
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+
+# Local
+.env
+.envrc

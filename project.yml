@@ -1,0 +1,58 @@
+name: MacBroom
+options:
+  bundleIdPrefix: com.juandediego
+  deploymentTarget:
+    macOS: "14.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_HARDENED_RUNTIME: YES
+    CODE_SIGN_STYLE: Automatic
+    DEAD_CODE_STRIPPING: YES
+
+targets:
+  MacBroom:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: MacBroom
+        excludes:
+          - "Resources/Info.plist"
+          - "Resources/MacBroom.entitlements"
+    resources:
+      - path: MacBroom/Resources/Assets.xcassets
+    info:
+      path: MacBroom/Resources/Info.plist
+      properties:
+        CFBundleName: MacBroom
+        CFBundleDisplayName: MacBroom
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "14.0"
+        LSApplicationCategoryType: public.app-category.utilities
+        NSHumanReadableCopyright: "Copyright © 2026 Juan de Diego. Released for the community."
+        NSDesktopFolderUsageDescription: "MacBroom needs access to scan files on your Desktop."
+        NSDocumentsFolderUsageDescription: "MacBroom needs access to scan files in your Documents."
+        NSDownloadsFolderUsageDescription: "MacBroom needs access to scan files in your Downloads."
+        NSAppleEventsUsageDescription: "MacBroom uses Apple Events to move files to Trash safely."
+    entitlements:
+      path: MacBroom/Resources/MacBroom.entitlements
+      properties:
+        com.apple.security.app-sandbox: false
+        com.apple.security.files.user-selected.read-write: true
+        com.apple.security.automation.apple-events: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.juandediego.macbroom
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        COMBINE_HIDPI_IMAGES: YES
+        ENABLE_PREVIEWS: YES
