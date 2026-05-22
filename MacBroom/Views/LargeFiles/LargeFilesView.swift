@@ -38,7 +38,10 @@ struct LargeFilesView: View {
 
             Divider()
 
-            if scanner.items.isEmpty && !scanner.isScanning {
+            if scanner.permissionDenied && scanner.items.isEmpty {
+                permissionDeniedHint
+                    .frame(maxHeight: .infinity)
+            } else if scanner.items.isEmpty && !scanner.isScanning {
                 ContentUnavailableView(
                     "Nothing oversized found",
                     systemImage: "checkmark.seal",
@@ -75,6 +78,41 @@ struct LargeFilesView: View {
 
     private var selectedSize: Int64 {
         scanner.items.filter { selection.contains($0.id) }.reduce(0) { $0 + $1.sizeBytes }
+    }
+
+    /// Shown when macOS denied access to one or more user folders. Explains
+    /// the situation and links straight to System Settings → Privacy & Security.
+    private var permissionDeniedHint: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "lock.shield.fill")
+                .font(.system(size: 44, weight: .semibold))
+                .foregroundStyle(SidebarItem.largeFiles.tint)
+            Text("macOS blocked access")
+                .font(.system(size: 18, weight: .bold))
+            if scanner.deniedRoots.isEmpty {
+                Text("Folder access is denied. Grant access to MacBroom in System Settings → Privacy & Security → Files and Folders.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 460)
+            } else {
+                Text("Couldn't read: \(scanner.deniedRoots.joined(separator: ", ")). Grant access in System Settings → Privacy & Security → Files and Folders.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: 460)
+            }
+            HStack(spacing: 10) {
+                Button("Open Privacy Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Try again") {
+                    Task { await scanner.scan() }
+                }
+            }
+        }
+        .padding()
     }
 
     private var footer: some View {

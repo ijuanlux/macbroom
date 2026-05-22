@@ -13,6 +13,11 @@ final class LargeFilesScanner: ObservableObject {
     @Published private(set) var items: [LargeFileItem] = []
     @Published private(set) var isScanning: Bool = false
     @Published private(set) var lastScanDate: Date?
+    /// True when at least one root folder couldn't be read (TCC denied).
+    /// LargeFilesView shows a "grant access" hint in that case.
+    @Published private(set) var permissionDenied: Bool = false
+    /// Names of the folders that were blocked by macOS this scan.
+    @Published private(set) var deniedRoots: [String] = []
 
     var totalSize: Int64 { items.reduce(0) { $0 + $1.sizeBytes } }
 
@@ -21,13 +26,17 @@ final class LargeFilesScanner: ObservableObject {
         guard !isScanning else { return }
         isScanning = true
         items = []
+        permissionDenied = false
+        deniedRoots = []
         defer { isScanning = false }
 
-        let collected = await Task.detached(priority: .userInitiated) {
+        let snapshot = await Task.detached(priority: .userInitiated) {
             LargeFilesScanner.scanRoots(threshold: threshold)
         }.value
 
-        items = collected.sorted { $0.sizeBytes > $1.sizeBytes }
+        items = snapshot.items.sorted { $0.sizeBytes > $1.sizeBytes }
+        deniedRoots = snapshot.deniedRoots
+        permissionDenied = !snapshot.deniedRoots.isEmpty
         lastScanDate = Date()
     }
 
@@ -49,7 +58,12 @@ final class LargeFilesScanner: ObservableObject {
         return (removed, reclaimed, failed)
     }
 
-    nonisolated private static func scanRoots(threshold: Int64) -> [LargeFileItem] {
+    struct ScanSnapshot {
+        let items: [LargeFileItem]
+        let deniedRoots: [String]
+    }
+
+    nonisolated private static func scanRoots(threshold: Int64) -> ScanSnapshot {
         let home = NSHomeDirectory()
         let roots: [(URL, String)] = [
             (URL(fileURLWithPath: "\(home)/Downloads"), "Downloads"),
@@ -64,14 +78,34 @@ final class LargeFilesScanner: ObservableObject {
         ]
 
         var results: [LargeFileItem] = []
+        var denied: [String] = []
 
         for (root, label) in roots {
             guard fm.fileExists(atPath: root.path) else { continue }
+
+            // Probe permission with contentsOfDirectory — if the folder has
+            // anything on disk but we read 0 entries, TCC denied us.
+            do {
+                let probe = try fm.contentsOfDirectory(at: root,
+                    includingPropertiesForKeys: nil,
+                    options: [.skipsHiddenFiles])
+                if probe.isEmpty {
+                    // Folder is truly empty — not denial. Skip silently.
+                    continue
+                }
+            } catch {
+                denied.append(label)
+                continue
+            }
+
             guard let enumerator = fm.enumerator(
                 at: root,
                 includingPropertiesForKeys: Array(keys),
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
-            ) else { continue }
+            ) else {
+                denied.append(label)
+                continue
+            }
 
             for case let url as URL in enumerator {
                 if SafetyPreferences.shared.isExcluded(url) { continue }
@@ -87,6 +121,6 @@ final class LargeFilesScanner: ObservableObject {
                 ))
             }
         }
-        return results
+        return ScanSnapshot(items: results, deniedRoots: denied)
     }
 }
