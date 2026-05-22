@@ -21,5 +21,12 @@ final class AppState: ObservableObject {
         if reclaimed > 0 {
             SoundEffects.playCleanup()
         }
+        // Achievement unlocks
+        let badges = AchievementsStore.shared
+        if reclaimed > 0 {
+            badges.acknowledgeCleanup()
+            badges.acknowledgeReclaim(total: stats.totalReclaimed)
+            badges.acknowledgeStreak(days: stats.currentStreak)
+        }
     }
 }

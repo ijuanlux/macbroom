@@ -225,6 +225,14 @@ final class AIAssistant: ObservableObject {
         let intents: [Intent] = [
             Intent(keywords: ["ryu", "hadouken", "haduken", "street fighter", "karate", "shoryuken"],
                    notification: .macbroomMakeAppleRyu),
+            Intent(keywords: ["goku", "kamehameha", "dragon ball", "super saiyan", "saiyajin"],
+                   notification: .macbroomMakeAppleGoku),
+            Intent(keywords: ["hulk", "smash", "green giant", "incredible hulk"],
+                   notification: .macbroomMakeAppleHulk),
+            Intent(keywords: ["pikachu", "pokemon", "thunderbolt", "electric"],
+                   notification: .macbroomMakeApplePikachu),
+            Intent(keywords: ["mario", "nintendo", "jumpman", "super mario", "luigi"],
+                   notification: .macbroomMakeAppleMario),
             Intent(keywords: ["spider", "spidey", "thwip", "web", "trepa"],
                    notification: .macbroomMakeAppleSpiderman),
             Intent(keywords: ["breakdance", "windmill", "b-boy", "spin"],
@@ -248,9 +256,11 @@ final class AIAssistant: ObservableObject {
     /// the real results. Saves the user from seeing `[call search_large_files,
     /// {"minSizeMB": 1000}]` in the bubble.
     private func executeFakeToolCalls(in text: String) async -> (cleanedText: String, results: [String]) {
-        // Loose pattern: [call NAME, {JSON}] or [call NAME {JSON}] or [call NAME]
-        // — the local model is sloppy with closing braces so we keep it generous.
-        let pattern = #"\[\s*call\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*,?\s*(\{[^\]]*\})?\s*\]"#
+        // Loose pattern: matches both well-formed `[call NAME, {JSON}]` and
+        // sloppy fragments like `[call` (no name, no closing) the local model
+        // sometimes spits out mid-generation. The closing `]` is optional and
+        // the function name is optional so we can still strip orphans.
+        let pattern = #"\[\s*call(?:\s+([a-zA-Z_][a-zA-Z0-9_]*))?\s*,?\s*(\{[^\]]*\}?)?\s*\]?"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else {
             return (text, [])
         }
@@ -261,7 +271,10 @@ final class AIAssistant: ObservableObject {
 
         var results: [String] = []
         for m in matches {
-            guard m.numberOfRanges >= 2 else { continue }
+            // Function name is optional in our loose pattern — if absent, just
+            // strip the orphan fragment without executing anything.
+            guard m.numberOfRanges >= 2,
+                  m.range(at: 1).location != NSNotFound else { continue }
             let name = ns.substring(with: m.range(at: 1))
             var argsJSON: String? = nil
             if m.numberOfRanges >= 3, m.range(at: 2).location != NSNotFound {
@@ -351,6 +364,18 @@ final class AIAssistant: ObservableObject {
         case "make_apple_ryu":
             NotificationCenter.default.post(name: .macbroomMakeAppleRyu, object: nil)
             return nil
+        case "make_apple_goku":
+            NotificationCenter.default.post(name: .macbroomMakeAppleGoku, object: nil)
+            return nil
+        case "make_apple_hulk":
+            NotificationCenter.default.post(name: .macbroomMakeAppleHulk, object: nil)
+            return nil
+        case "make_apple_pikachu":
+            NotificationCenter.default.post(name: .macbroomMakeApplePikachu, object: nil)
+            return nil
+        case "make_apple_mario":
+            NotificationCenter.default.post(name: .macbroomMakeAppleMario, object: nil)
+            return nil
 
         default:
             return nil
@@ -381,6 +406,10 @@ final class AIAssistant: ObservableObject {
     private func extractAndDispatchTools(from raw: String) -> String {
         let mapping: [(String, Notification.Name)] = [
             ("make_apple_ryu",         .macbroomMakeAppleRyu),
+            ("make_apple_goku",        .macbroomMakeAppleGoku),
+            ("make_apple_hulk",        .macbroomMakeAppleHulk),
+            ("make_apple_pikachu",     .macbroomMakeApplePikachu),
+            ("make_apple_mario",       .macbroomMakeAppleMario),
             ("make_apple_spiderman",   .macbroomMakeAppleSpiderman),
             ("make_apple_breakdance",  .macbroomMakeAppleBreakdance),
             ("make_apple_dance",       .macbroomMakeAppleDance),
@@ -403,6 +432,82 @@ final class AIAssistant: ObservableObject {
             cleaned = cleaned.replacingOccurrences(of: "\n\n\n", with: "\n\n")
         }
         return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Gathers Mac stats (disk usage, dev junk, biggest apps, etc) and feeds
+    /// them to the model with a roast-comedy prompt. Output reads like a
+    /// standup bit aimed at the user's messy Mac.
+    func roastMe() async {
+        guard !isThinking else { return }
+        messages.append(.user("roast my Mac"))
+        isThinking = true
+        defer { isThinking = false }
+
+        let stats = await collectRoastStats()
+        let roastPrompt = """
+        Roast the user's Mac in 2-3 short, savage, funny lines. Be playful, \
+        slang-heavy, use the data below as ammo. Pick the spiciest stat and \
+        go for the jugular. No disclaimers, no "respectfully". Match the \
+        user's language (Spanish if any Spanish hint, else English).
+
+        DATA TO ROAST:
+        \(stats)
+        """
+
+        if #available(macOS 26.0, *) {
+            #if canImport(FoundationModels)
+            guard let session = ensureSession() else {
+                messages.append(.assistant("can't roast you rn, model's not loaded"))
+                return
+            }
+            do {
+                let response = try await session.respond(to: roastPrompt)
+                let cleaned = extractAndDispatchTools(from: response.content)
+                messages.append(.assistant(cleaned))
+                return
+            } catch {
+                sessionStorage = nil
+                messages.append(.assistant("model dodged the roast 😅 try again"))
+                return
+            }
+            #endif
+        }
+        messages.append(.assistant("Roast mode needs macOS 26 with Apple Intelligence."))
+    }
+
+    private func collectRoastStats() async -> String {
+        var lines: [String] = []
+        let storage = StorageScanner()
+        await storage.scan()
+        let pct = storage.totalBytes > 0
+            ? Int(Double(storage.usedBytes) / Double(storage.totalBytes) * 100)
+            : 0
+        lines.append("Disk: \(FileSystemUtils.formatBytes(storage.usedBytes)) used / \(FileSystemUtils.formatBytes(storage.totalBytes)) (\(pct)% full)")
+        if let other = storage.usages.first(where: { $0.category.rawValue.lowercased().contains("other") }) {
+            lines.append("\"Other\" category: \(FileSystemUtils.formatBytes(other.sizeBytes)) — nobody knows what's in there")
+        }
+
+        let dev = DevJunkScanner()
+        await dev.scan()
+        if dev.totalSize > 0 {
+            lines.append("Dev junk: \(FileSystemUtils.formatBytes(dev.totalSize)) in \(dev.items.count) places")
+        }
+
+        let apps = AppScanner()
+        await apps.scan()
+        let biggest = apps.apps.sorted { $0.appSize > $1.appSize }.prefix(3)
+        if !biggest.isEmpty {
+            let names = biggest.map { "\($0.displayName) \(FileSystemUtils.formatBytes($0.appSize))" }.joined(separator: ", ")
+            lines.append("Biggest apps: \(names)")
+        }
+
+        let caches = CacheScanner()
+        await caches.scan()
+        if caches.totalSize > 0 {
+            lines.append("Stale caches: \(FileSystemUtils.formatBytes(caches.totalSize))")
+        }
+
+        return lines.joined(separator: "\n")
     }
 
     func reset() {

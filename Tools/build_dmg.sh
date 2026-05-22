@@ -5,7 +5,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.5.0"
+VERSION="0.6.0"
 APP_NAME="MacBroom"
 APP_BUNDLE="build/release-derived/Build/Products/Release/${APP_NAME}.app"
 VOL_NAME="MacBroom ${VERSION}"

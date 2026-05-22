@@ -37,6 +37,47 @@ enum CharacterPalette {
         Color(red: 0.55, green: 0.55, blue: 0.60),    // 16 ipod silver
     ]
 
+    /// Goku Super Saiyan palette: yellow/gold body, energy vibes.
+    static let goku: [Color] = {
+        var c = colors
+        let gold   = Color(red: 0.99, green: 0.84, blue: 0.18)
+        let orange = Color(red: 0.98, green: 0.55, blue: 0.10)
+        c[1] = gold; c[2] = orange; c[3] = gold; c[4] = orange
+        c[5] = gold; c[6] = orange
+        return c
+    }()
+
+    /// Hulk palette: huge green stripes, angry colors.
+    static let hulk: [Color] = {
+        var c = colors
+        let green = Color(red: 0.30, green: 0.72, blue: 0.28)
+        let dark  = Color(red: 0.18, green: 0.42, blue: 0.16)
+        c[1] = green; c[2] = green; c[3] = dark; c[4] = green
+        c[5] = dark;  c[6] = green
+        return c
+    }()
+
+    /// Pikachu palette: yellow body, red mouth row stays for the cheeks.
+    static let pikachu: [Color] = {
+        var c = colors
+        let yellow = Color(red: 0.99, green: 0.85, blue: 0.10)
+        let dark   = Color(red: 0.78, green: 0.62, blue: 0.05)
+        c[1] = yellow; c[2] = yellow; c[3] = yellow
+        c[4] = Color(red: 0.91, green: 0.30, blue: 0.27)   // keep red mouth area
+        c[5] = yellow; c[6] = dark
+        return c
+    }()
+
+    /// Mario palette: red body + blue stripes (overalls).
+    static let mario: [Color] = {
+        var c = colors
+        let red  = Color(red: 0.91, green: 0.18, blue: 0.18)
+        let blue = Color(red: 0.16, green: 0.36, blue: 0.78)
+        c[1] = red; c[2] = red; c[3] = red
+        c[4] = blue; c[5] = blue; c[6] = blue
+        return c
+    }()
+
     /// Ryu (Street Fighter) palette: rainbow stripes become white gi with a
     /// thick black belt running through the mouth row.
     static let ryu: [Color] = {

@@ -43,6 +43,18 @@ final class StatsStore: ObservableObject {
         Calendar.current.dateComponents([.day], from: firstUseDate, to: Date()).day ?? 0
     }
 
+    /// Consecutive days ending today (or yesterday) with at least one cleanup.
+    var currentStreak: Int {
+        let days = last30Days().reversed()
+        var streak = 0
+        var seenAny = false
+        for entry in days {
+            if entry.bytes > 0 { streak += 1; seenAny = true }
+            else if seenAny { break }
+        }
+        return streak
+    }
+
     /// Returns 30 entries (one per day), filling zero-byte days so the chart aligns.
     func last30Days() -> [DailyCleanup] {
         let cal = Calendar.current

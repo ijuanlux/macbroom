@@ -11,6 +11,11 @@ extension Notification.Name {
     static let macbroomMakeAppleBreakdance = Notification.Name("macbroom.ai.makeAppleBreakdance")
     static let macbroomMakeAppleSpiderman  = Notification.Name("macbroom.ai.makeAppleSpiderman")
     static let macbroomMakeAppleRyu        = Notification.Name("macbroom.ai.makeAppleRyu")
+    static let macbroomRoastMe             = Notification.Name("macbroom.ai.roastMe")
+    static let macbroomMakeAppleGoku       = Notification.Name("macbroom.ai.makeAppleGoku")
+    static let macbroomMakeAppleHulk       = Notification.Name("macbroom.ai.makeAppleHulk")
+    static let macbroomMakeApplePikachu    = Notification.Name("macbroom.ai.makeApplePikachu")
+    static let macbroomMakeAppleMario      = Notification.Name("macbroom.ai.makeAppleMario")
 }
 
 /// Read-only tools exposed to the Foundation Models session.
@@ -46,6 +51,10 @@ enum AIAssistantTools {
             MakeAppleBreakdanceTool(),
             MakeAppleSpidermanTool(),
             MakeAppleRyuTool(),
+            MakeAppleGokuTool(),
+            MakeAppleHulkTool(),
+            MakeApplePikachuTool(),
+            MakeAppleMarioTool(),
             ListLargestAppsTool(),
         ]
     }
@@ -301,6 +310,54 @@ struct MakeAppleRyuTool: Tool {
             NotificationCenter.default.post(name: .macbroomMakeAppleRyu, object: nil)
         }
         return "🥋 HADOUKEN incoming!"
+    }
+}
+
+/// Goku Super Saiyan mode — gold palette + Kamehameha beam.
+@available(macOS 26.0, *)
+struct MakeAppleGokuTool: Tool {
+    let name = "make_apple_goku"
+    let description = "Turn the apple into Super Saiyan Goku and fire a Kamehameha beam that obliterates trash. Use for: goku, kamehameha, dragon ball, super saiyan."
+    @Generable struct Arguments {}
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run { NotificationCenter.default.post(name: .macbroomMakeAppleGoku, object: nil) }
+        return "KAAAA... MEEEE... HAAAA... 💥"
+    }
+}
+
+/// Hulk smash — green palette + ground pound.
+@available(macOS 26.0, *)
+struct MakeAppleHulkTool: Tool {
+    let name = "make_apple_hulk"
+    let description = "Turn the apple into Hulk: huge green form, smashes the floor and obliterates trash with debris columns. Use for: hulk, smash, angry, green giant."
+    @Generable struct Arguments {}
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run { NotificationCenter.default.post(name: .macbroomMakeAppleHulk, object: nil) }
+        return "HULK SMASH! 💚"
+    }
+}
+
+/// Pikachu — yellow palette + chain lightning between trash.
+@available(macOS 26.0, *)
+struct MakeApplePikachuTool: Tool {
+    let name = "make_apple_pikachu"
+    let description = "Turn the apple into Pikachu: yellow palette, chain lightning across all trash, everything explodes at once. Use for: pikachu, pokemon, electric, thunderbolt."
+    @Generable struct Arguments {}
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run { NotificationCenter.default.post(name: .macbroomMakeApplePikachu, object: nil) }
+        return "PIKAA... CHUUU!!! ⚡"
+    }
+}
+
+/// Mario — red+blue palette + bouncing jumps on each trash with coins.
+@available(macOS 26.0, *)
+struct MakeAppleMarioTool: Tool {
+    let name = "make_apple_mario"
+    let description = "Turn the apple into Mario: red/blue palette, bounces on each trash piece with coin pops. Use for: mario, nintendo, jumpman, super mario."
+    @Generable struct Arguments {}
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run { NotificationCenter.default.post(name: .macbroomMakeAppleMario, object: nil) }
+        return "It's a-me, Mario! 🍄"
     }
 }
 

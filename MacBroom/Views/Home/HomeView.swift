@@ -17,6 +17,23 @@ private struct HadoukenFlash {
     var opacity: Double = 1
 }
 
+/// Horizontal energy beam used by the Kamehameha animation.
+private struct EnergyBeam {
+    let start: CGPoint
+    var end: CGPoint
+    var thickness: CGFloat
+    var color: Color
+    var opacity: Double = 1
+}
+
+/// Lightning strike used by the Pikachu chain attack.
+private struct LightningArc: Identifiable {
+    let id = UUID()
+    let from: CGPoint
+    let to: CGPoint
+    var opacity: Double = 1
+}
+
 private struct TrashPlacement: Identifiable, Hashable {
     let id = UUID()
     let sprite: [[Int]]
@@ -67,12 +84,21 @@ struct HomeView: View {
     @State private var hintTimer: Timer?
     @State private var hintPulse: Bool = false
     @StateObject private var aiAssistant = AIAssistant.shared
+    @StateObject private var achievements = AchievementsStore.shared
     @State private var isBreakdancing: Bool = false
     @State private var breakdanceRotation: Double = 0
     @State private var isSpiderman: Bool = false
     @State private var spiderClimb: CGFloat = 0       // 0 = floor, 1 = ceiling
     @State private var webVisible: Bool = false
     @State private var isRyu: Bool = false
+    @State private var isGoku: Bool = false
+    @State private var isHulk: Bool = false
+    @State private var isPikachu: Bool = false
+    @State private var isMario: Bool = false
+    @State private var hulkScale: CGFloat = 1.0
+    @State private var marioJumpY: CGFloat = 0
+    @State private var energyBeam: EnergyBeam? = nil
+    @State private var lightningArcs: [LightningArc] = []
     @State private var hadoukenPosition: CGPoint? = nil
     @State private var debris: [DebrisPiece] = []
     @State private var debrisTimer: Timer?
@@ -230,8 +256,12 @@ struct HomeView: View {
                     cokeView(sceneSize: geo.size)
                 }
                 hadoukenOverlay(sceneSize: geo.size)
+                kamehamehaOverlay(sceneSize: geo.size)
+                lightningOverlay(sceneSize: geo.size)
                 debrisOverlay(sceneSize: geo.size)
                 hadoukenFlashOverlay
+                streakFlameOverlay(sceneSize: geo.size)
+                achievementToastOverlay(sceneSize: geo.size)
                 aiSpeechBubbleView(sceneSize: geo.size)
                 tutorialHintView(sceneSize: geo.size)
                 statusOverlay(sceneSize: geo.size)
@@ -247,22 +277,18 @@ struct HomeView: View {
         .onChange(of: coordinator.phase) { _, newPhase in
             handlePhase(newPhase)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .macbroomRunFullCleanup)) { _ in
-            Task { await runFullCleanupFromAI() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleDance)) { _ in
-            musicTask?.cancel()
-            musicTask = Task { await musicBreak() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleBreakdance)) { _ in
-            Task { await breakdance() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleSpiderman)) { _ in
-            Task { await goSpiderman() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleRyu)) { _ in
-            Task { await goRyu() }
-        }
+        .modifier(AINotificationListeners(
+            onCleanup: { Task { await runFullCleanupFromAI() } },
+            onDance: { musicTask?.cancel(); musicTask = Task { await musicBreak() } },
+            onBreakdance: { Task { await breakdance() } },
+            onSpiderman: { Task { await goSpiderman() } },
+            onRyu: { Task { await goRyu() } },
+            onGoku: { Task { await goGoku() } },
+            onHulk: { Task { await goHulk() } },
+            onPikachu: { Task { await goPikachu() } },
+            onMario: { Task { await goMario() } },
+            onRoast: { Task { await aiAssistant.roastMe() } }
+        ))
         .onChange(of: aiAssistant.messages.count) { _, _ in
             refreshAIBubble()
         }
@@ -324,13 +350,12 @@ struct HomeView: View {
         .frame(width: size.width, height: size.height)
     }
 
+    /// Wallpaper colours change with the real-world hour.
+    /// Day 7-19 warm cream, dusk 19-21 orange/pink, night 21-7 deep blue.
     private func wallpaper(size: CGSize) -> some View {
         ZStack {
             LinearGradient(
-                colors: [
-                    Color(red: 0.86, green: 0.72, blue: 0.62),
-                    Color(red: 0.94, green: 0.82, blue: 0.72)
-                ],
+                colors: DayPhase.current.wallpaperColors,
                 startPoint: .top, endPoint: .bottom
             )
             HStack(spacing: 0) {
@@ -338,11 +363,18 @@ struct HomeView: View {
                 let count = Int((size.width / stripeWidth).rounded(.up)) + 1
                 ForEach(0..<count, id: \.self) { i in
                     Rectangle()
-                        .fill(i.isMultiple(of: 2) ? Color.white.opacity(0.06) : Color.clear)
+                        .fill(i.isMultiple(of: 2)
+                              ? DayPhase.current.stripeColor
+                              : Color.clear)
                         .frame(width: stripeWidth)
                 }
             }
             .frame(width: size.width)
+            // Night cool overlay tints everything except the very front
+            if DayPhase.current == .night {
+                Color(red: 0.05, green: 0.08, blue: 0.20).opacity(0.18)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -786,22 +818,48 @@ struct HomeView: View {
     }
 
     private var window: some View {
-        ZStack {
+        let phase = DayPhase.current
+        return ZStack {
             Rectangle()
                 .fill(Color(red: 0.42, green: 0.28, blue: 0.14))
                 .frame(width: 120, height: 90)
+            // Sky panes change per phase
             VStack(spacing: 0) {
                 HStack(spacing: 0) {
-                    Rectangle().fill(Color(red: 0.55, green: 0.82, blue: 0.95))
-                    Rectangle().fill(Color(red: 0.50, green: 0.78, blue: 0.93))
+                    Rectangle().fill(phase.skyTopLeft)
+                    Rectangle().fill(phase.skyTopRight)
                 }
                 HStack(spacing: 0) {
-                    Rectangle().fill(Color(red: 0.50, green: 0.78, blue: 0.93))
-                    Rectangle().fill(Color(red: 0.45, green: 0.74, blue: 0.90))
+                    Rectangle().fill(phase.skyBottomLeft)
+                    Rectangle().fill(phase.skyBottomRight)
                 }
             }
             .frame(width: 108, height: 78)
-            Circle().fill(Theme.stripeYellow).frame(width: 22, height: 22).offset(x: -28, y: -20)
+            // Sun by day, moon by night, sunset blob at dusk
+            switch phase {
+            case .day:
+                Circle().fill(Theme.stripeYellow).frame(width: 22, height: 22).offset(x: -28, y: -20)
+            case .dusk:
+                Circle().fill(Color(red: 0.96, green: 0.50, blue: 0.20))
+                    .frame(width: 22, height: 22).offset(x: -28, y: -6)
+            case .night:
+                ZStack {
+                    Circle().fill(Color(red: 0.96, green: 0.94, blue: 0.78))
+                        .frame(width: 20, height: 20)
+                    // Crescent moon shadow
+                    Circle().fill(phase.skyTopLeft)
+                        .frame(width: 16, height: 16).offset(x: 6, y: -2)
+                }
+                .offset(x: -28, y: -20)
+                // Stars
+                ForEach(0..<5, id: \.self) { i in
+                    let xs: [CGFloat] = [-10, 8, 22, -38, 36]
+                    let ys: [CGFloat] = [-30, -18, 8, 14, -32]
+                    Circle().fill(Color.white.opacity(0.9))
+                        .frame(width: 2, height: 2)
+                        .offset(x: xs[i], y: ys[i])
+                }
+            }
             Rectangle().fill(Color(red: 0.42, green: 0.28, blue: 0.14)).frame(width: 108, height: 4)
             Rectangle().fill(Color(red: 0.42, green: 0.28, blue: 0.14)).frame(width: 4, height: 78)
         }
@@ -1073,6 +1131,10 @@ struct HomeView: View {
         let palette: [Color] = {
             if isSpiderman { return CharacterPalette.spiderman }
             if isRyu       { return CharacterPalette.ryu }
+            if isGoku      { return CharacterPalette.goku }
+            if isHulk      { return CharacterPalette.hulk }
+            if isPikachu   { return CharacterPalette.pikachu }
+            if isMario     { return CharacterPalette.mario }
             return CharacterPalette.colors
         }()
         return ZStack(alignment: .topLeading) {
@@ -1099,10 +1161,10 @@ struct HomeView: View {
                         .transition(.opacity)
                 }
             }
-            .scaleEffect(x: facing, y: 1)
+            .scaleEffect(x: facing * hulkScale, y: hulkScale)
             .rotationEffect(.degrees(breakdanceRotation))
         }
-        .position(x: charX, y: charY)
+        .position(x: charX, y: charY + marioJumpY)
         .animation(.linear(duration: 0.35), value: charXRatio)
         .animation(.easeInOut(duration: 0.4), value: isSitting)
         .animation(.easeInOut(duration: 0.18), value: danceOffset)
@@ -1377,6 +1439,7 @@ struct HomeView: View {
             return
         }
         visibleAIMessageId = last.id
+        VoiceNarrator.shared.speak(last.content)
         let duration = min(22.0, max(8.0, 6.0 + Double(last.content.count) * 0.055))
         aiBubbleHideTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
@@ -1506,6 +1569,7 @@ struct HomeView: View {
     // MARK: - Music break + dance
 
     private func musicBreak() async {
+        AchievementsStore.shared.acknowledgeDance()
         // Pull out the iPod + put on headphones with a small intro.
         await MainActor.run {
             withAnimation(.easeOut(duration: 0.25)) {
@@ -1801,6 +1865,7 @@ struct HomeView: View {
     /// Breakdance: cancel idle motion, spin the sprite multiple times.
     private func breakdance() async {
         cancelMusicBreakIfActive()
+        AchievementsStore.shared.acknowledgeBreakdance()
         await MainActor.run {
             isSitting = false
             isBreakdancing = true
@@ -1822,6 +1887,242 @@ struct HomeView: View {
         speak("yeah baby", duration: 2.0)
     }
 
+    // MARK: - New hero modes (Goku / Hulk / Pikachu / Mario)
+
+    private func refreshTrashIfEmpty() {
+        if trash.allSatisfy({ $0.state != .onFloor }) {
+            trash = HomeView.defaultTrash()
+            inCanCount = 0
+        }
+    }
+
+    /// Goku Super Saiyan + Kamehameha: gold palette, charge, fire horizontal
+    /// beam that wipes every piece of trash on the floor.
+    private func goGoku() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run { isSitting = false; isGoku = true }
+        speak("KAAAA…", duration: 1.0)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        speak("MEEEE… HAAAA…", duration: 1.0)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        await MainActor.run { refreshTrashIfEmpty() }
+        speak("HAAAAAA! 💥", duration: 1.5)
+
+        guard let geo = currentSceneSize else {
+            await MainActor.run { isGoku = false }
+            return
+        }
+        let floorY = geo.height - geo.height * floorHeightRatio
+        let charSpriteHeight = CGFloat(AppleSprites.idle.count) * pixelScale
+        let yLine = floorY - charSpriteHeight / 2 + pixelScale * 2
+        let startX = charXRatio * geo.width + facing * pixelScale * 11
+        let endX: CGFloat = facing > 0 ? geo.width + 50 : -50
+        await MainActor.run {
+            energyBeam = EnergyBeam(
+                start: CGPoint(x: startX, y: yLine),
+                end: CGPoint(x: startX, y: yLine),
+                thickness: 28,
+                color: Color(red: 0.55, green: 0.90, blue: 1.0)
+            )
+            withAnimation(.easeOut(duration: 0.35)) {
+                energyBeam?.end = CGPoint(x: endX, y: yLine)
+            }
+        }
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        // Vaporize every trash in the beam path with debris
+        await MainActor.run {
+            for i in trash.indices where trash[i].state == .onFloor {
+                let trashScreenX = trash[i].baseXRatio * geo.width
+                let origin = CGPoint(x: trashScreenX, y: yLine)
+                spawnDebris(at: origin, sprite: trash[i].sprite, sceneSize: geo)
+                trash[i].state = .inCan
+                inCanCount += 1
+            }
+        }
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.4)) { energyBeam?.opacity = 0 }
+        }
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        await MainActor.run { energyBeam = nil; isGoku = false }
+    }
+
+    /// Hulk smash: turn green + grow 1.5x + ground-pound, all trash explodes.
+    private func goHulk() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run { isSitting = false; isHulk = true; refreshTrashIfEmpty() }
+        speak("HULK ANGRY", duration: 1.0)
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.4)) { hulkScale = 1.55 }
+        }
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        speak("HULK SMASH! 💚", duration: 1.5)
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.18)) { hulkScale = 1.40 }
+        }
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.10)) { hulkScale = 1.70 }
+        }
+        guard let geo = currentSceneSize else {
+            await MainActor.run { isHulk = false; hulkScale = 1.0 }
+            return
+        }
+        let floorY = geo.height - geo.height * floorHeightRatio
+        await MainActor.run {
+            for i in trash.indices where trash[i].state == .onFloor {
+                let pos = CGPoint(x: trash[i].baseXRatio * geo.width, y: floorY - 20)
+                spawnDebris(at: pos, sprite: trash[i].sprite, sceneSize: geo)
+                trash[i].state = .inCan
+                inCanCount += 1
+            }
+            spawnFlash(at: CGPoint(x: charXRatio * geo.width, y: floorY - 10))
+        }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.5)) { hulkScale = 1.0; isHulk = false }
+        }
+    }
+
+    /// Pikachu chain lightning: yellow, lightning arcs between every trash
+    /// then they all explode at once.
+    private func goPikachu() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run { isSitting = false; isPikachu = true; refreshTrashIfEmpty() }
+        speak("PIKAAA…", duration: 1.0)
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        speak("CHUUUUU! ⚡", duration: 1.5)
+        guard let geo = currentSceneSize else {
+            await MainActor.run { isPikachu = false }
+            return
+        }
+        let floorY = geo.height - geo.height * floorHeightRatio
+        let onFloor = trash.enumerated().filter { $0.element.state == .onFloor }
+        var lastPoint = CGPoint(x: charXRatio * geo.width + facing * pixelScale * 10,
+                                y: floorY - 60)
+        var arcs: [LightningArc] = []
+        for (_, item) in onFloor {
+            let next = CGPoint(x: item.baseXRatio * geo.width, y: floorY - 20)
+            arcs.append(LightningArc(from: lastPoint, to: next))
+            lastPoint = next
+        }
+        await MainActor.run { lightningArcs = arcs }
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        await MainActor.run {
+            for (idx, item) in onFloor {
+                spawnDebris(at: CGPoint(x: item.baseXRatio * geo.width, y: floorY - 20),
+                            sprite: item.sprite, sceneSize: geo)
+                trash[idx].state = .inCan
+                inCanCount += 1
+            }
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.4)) {
+                for i in lightningArcs.indices { lightningArcs[i].opacity = 0 }
+            }
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        await MainActor.run { lightningArcs = []; isPikachu = false }
+    }
+
+    /// Mario bouncing — sequential jumps onto each trash, each impact spawns
+    /// a tiny "coin" debris of yellow dots.
+    private func goMario() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run { isSitting = false; isMario = true; refreshTrashIfEmpty() }
+        speak("It's a-me, Mario! 🍄", duration: 1.5)
+        guard let geo = currentSceneSize else {
+            await MainActor.run { isMario = false }
+            return
+        }
+        let order = trash.enumerated()
+            .filter { $0.element.state == .onFloor }
+            .sorted { $0.element.baseXRatio < $1.element.baseXRatio }
+        for (idx, item) in order {
+            await walkAndWait(to: item.baseXRatio, duration: 0.35)
+            // Jump
+            await MainActor.run {
+                withAnimation(.easeOut(duration: 0.18)) { marioJumpY = -40 }
+            }
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            await MainActor.run {
+                withAnimation(.easeIn(duration: 0.18)) { marioJumpY = 0 }
+            }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            // BOING — coin debris
+            await MainActor.run {
+                let coinSprite: [[Int]] = [[9,9],[9,9]]
+                spawnDebris(at: CGPoint(x: item.baseXRatio * geo.width,
+                                        y: geo.height - geo.height * floorHeightRatio - 20),
+                            sprite: coinSprite, sceneSize: geo)
+                trash[idx].state = .inCan
+                inCanCount += 1
+            }
+        }
+        speak("Wahoo!", duration: 2.0)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.4)) { isMario = false }
+        }
+    }
+
+    /// Horizontal energy beam used by Kamehameha. Glow + bright core.
+    @ViewBuilder
+    private func kamehamehaOverlay(sceneSize: CGSize) -> some View {
+        if let beam = energyBeam {
+            let midY = beam.start.y
+            let minX = min(beam.start.x, beam.end.x)
+            let maxX = max(beam.start.x, beam.end.x)
+            ZStack {
+                Rectangle()
+                    .fill(beam.color.opacity(0.30))
+                    .frame(width: maxX - minX, height: beam.thickness * 2.2)
+                    .position(x: (minX + maxX) / 2, y: midY)
+                Rectangle()
+                    .fill(beam.color)
+                    .frame(width: maxX - minX, height: beam.thickness)
+                    .position(x: (minX + maxX) / 2, y: midY)
+                    .shadow(color: beam.color.opacity(0.8), radius: 14)
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: maxX - minX, height: beam.thickness * 0.4)
+                    .position(x: (minX + maxX) / 2, y: midY)
+            }
+            .opacity(beam.opacity)
+            .allowsHitTesting(false)
+            .zIndex(48)
+        }
+    }
+
+    /// Pikachu chain lightning — jagged path between consecutive points.
+    @ViewBuilder
+    private func lightningOverlay(sceneSize: CGSize) -> some View {
+        if !lightningArcs.isEmpty {
+            ZStack {
+                ForEach(lightningArcs) { arc in
+                    Path { p in
+                        p.move(to: arc.from)
+                        // Jagged segments
+                        let steps = 5
+                        for i in 1..<steps {
+                            let t = CGFloat(i) / CGFloat(steps)
+                            let x = arc.from.x + (arc.to.x - arc.from.x) * t
+                            let y = arc.from.y + (arc.to.y - arc.from.y) * t + CGFloat.random(in: -16...16)
+                            p.addLine(to: CGPoint(x: x, y: y))
+                        }
+                        p.addLine(to: arc.to)
+                    }
+                    .stroke(Color(red: 0.99, green: 0.93, blue: 0.20), lineWidth: 3)
+                    .shadow(color: Color(red: 0.99, green: 0.85, blue: 0.10).opacity(0.9), radius: 6)
+                    .opacity(arc.opacity)
+                }
+            }
+            .allowsHitTesting(false)
+            .zIndex(48)
+        }
+    }
+
     /// Ryu sequence — karate gi + headband, walks to each piece of trash and
     /// fires a Hadouken energy ball that obliterates it on contact.
     private func goRyu() async {
@@ -1830,6 +2131,8 @@ struct HomeView: View {
             isSitting = false
             isRyu = true
         }
+        // Each Ryu invocation counts as one hadouken session.
+        AchievementsStore.shared.acknowledgeHadouken()
         speak("HEADBAND ON 🥋", duration: 1.8)
         try? await Task.sleep(nanoseconds: 1_500_000_000)
 
@@ -2044,6 +2347,54 @@ struct HomeView: View {
         }
     }
 
+    // MARK: - Achievements overlays
+
+    /// Flame next to the apple while a cleanup streak >= 2 days is active.
+    @ViewBuilder
+    private func streakFlameOverlay(sceneSize: CGSize) -> some View {
+        let streak = currentStreak()
+        if streak >= 2, !isBreakdancing, !isSpiderman, !isRyu {
+            let charSpriteHeight = CGFloat(AppleSprites.idle.count) * pixelScale
+            let floorY = sceneSize.height - sceneSize.height * floorHeightRatio
+            let sitYOffset: CGFloat = isSitting ? -pixelScale * 2 : 0
+            let sitXOffset: CGFloat = isSitting ? pixelScale * 2 : 0
+            let charX = charXRatio * sceneSize.width + sitXOffset + danceOffset
+            let charTopY = floorY - charSpriteHeight + pixelScale * 2 + sitYOffset
+            StreakFlame(days: streak)
+                .position(x: charX + pixelScale * 11, y: charTopY + 6)
+                .transition(.opacity)
+        }
+    }
+
+    /// Toast that pops in from the top when a new achievement unlocks.
+    @ViewBuilder
+    private func achievementToastOverlay(sceneSize: CGSize) -> some View {
+        if let a = achievements.recentlyUnlocked {
+            VStack {
+                AchievementToast(achievement: a)
+                    .padding(.top, 70)
+                Spacer()
+            }
+            .frame(width: sceneSize.width, height: sceneSize.height)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .allowsHitTesting(false)
+            .zIndex(60)
+        }
+    }
+
+    /// Counts consecutive days ending today (or yesterday) with any cleanup.
+    /// Uses StatsStore data — pulls from AppState so persists across launches.
+    private func currentStreak() -> Int {
+        let days = appState.stats.last30Days().reversed()
+        var streak = 0
+        var seenAny = false
+        for entry in days {
+            if entry.bytes > 0 { streak += 1; seenAny = true }
+            else if seenAny { break }
+        }
+        return streak
+    }
+
     /// Glowing blue Hadouken energy ball rendered when `hadoukenPosition` is set.
     @ViewBuilder
     private func hadoukenOverlay(sceneSize: CGSize) -> some View {
@@ -2079,6 +2430,7 @@ struct HomeView: View {
     /// drop back down. Two climb cycles for extra drama.
     private func goSpiderman() async {
         cancelMusicBreakIfActive()
+        AchievementsStore.shared.acknowledgeSpiderman()
         await MainActor.run {
             isSitting = false
             isSpiderman = true
@@ -2193,6 +2545,7 @@ struct HomeView: View {
 
     private func speak(_ text: String, duration: Double = 3.5) {
         withAnimation(.easeOut(duration: 0.2)) { message = text }
+        VoiceNarrator.shared.speak(text)
         messageTimer?.invalidate()
         messageTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { _ in
             Task { @MainActor in
@@ -2238,6 +2591,102 @@ struct HomeView: View {
             TrashPlacement(sprite: TrashSprites.can,      baseXRatio: 0.78),
             TrashPlacement(sprite: TrashSprites.paper,    baseXRatio: 0.84),
         ]
+    }
+}
+
+/// Bundles all `.onReceive(...)` listeners for AI-triggered animations into a
+/// single `ViewModifier`. SwiftUI's type-checker chokes when you chain a dozen
+/// onReceive modifiers inline, so we factor them here.
+private struct AINotificationListeners: ViewModifier {
+    let onCleanup: () -> Void
+    let onDance: () -> Void
+    let onBreakdance: () -> Void
+    let onSpiderman: () -> Void
+    let onRyu: () -> Void
+    let onGoku: () -> Void
+    let onHulk: () -> Void
+    let onPikachu: () -> Void
+    let onMario: () -> Void
+    let onRoast: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomRunFullCleanup))    { _ in onCleanup() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleDance))    { _ in onDance() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleBreakdance)){ _ in onBreakdance() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleSpiderman)){ _ in onSpiderman() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleRyu))      { _ in onRyu() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleGoku))     { _ in onGoku() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleHulk))     { _ in onHulk() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeApplePikachu))  { _ in onPikachu() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleMario))    { _ in onMario() }
+            .onReceive(NotificationCenter.default.publisher(for: .macbroomRoastMe))           { _ in onRoast() }
+    }
+}
+
+/// Tracks the real-world hour and exposes wallpaper / sky colours per phase.
+/// Used by `HomeView.wallpaper` and `HomeView.window` so the room reflects
+/// time of day without requiring any user setting.
+enum DayPhase {
+    case day, dusk, night
+
+    static var current: DayPhase {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 7..<19:  return .day
+        case 19..<21: return .dusk
+        default:      return .night
+        }
+    }
+
+    var wallpaperColors: [Color] {
+        switch self {
+        case .day:
+            return [Color(red: 0.86, green: 0.72, blue: 0.62),
+                    Color(red: 0.94, green: 0.82, blue: 0.72)]
+        case .dusk:
+            return [Color(red: 0.78, green: 0.50, blue: 0.40),
+                    Color(red: 0.90, green: 0.62, blue: 0.45)]
+        case .night:
+            return [Color(red: 0.34, green: 0.30, blue: 0.42),
+                    Color(red: 0.48, green: 0.40, blue: 0.50)]
+        }
+    }
+
+    var stripeColor: Color {
+        switch self {
+        case .day, .dusk: return Color.white.opacity(0.06)
+        case .night:      return Color.white.opacity(0.04)
+        }
+    }
+
+    var skyTopLeft: Color {
+        switch self {
+        case .day:   return Color(red: 0.55, green: 0.82, blue: 0.95)
+        case .dusk:  return Color(red: 0.92, green: 0.52, blue: 0.36)
+        case .night: return Color(red: 0.08, green: 0.10, blue: 0.24)
+        }
+    }
+    var skyTopRight: Color {
+        switch self {
+        case .day:   return Color(red: 0.50, green: 0.78, blue: 0.93)
+        case .dusk:  return Color(red: 0.88, green: 0.40, blue: 0.35)
+        case .night: return Color(red: 0.10, green: 0.12, blue: 0.28)
+        }
+    }
+    var skyBottomLeft: Color {
+        switch self {
+        case .day:   return Color(red: 0.50, green: 0.78, blue: 0.93)
+        case .dusk:  return Color(red: 0.85, green: 0.45, blue: 0.32)
+        case .night: return Color(red: 0.12, green: 0.14, blue: 0.30)
+        }
+    }
+    var skyBottomRight: Color {
+        switch self {
+        case .day:   return Color(red: 0.45, green: 0.74, blue: 0.90)
+        case .dusk:  return Color(red: 0.74, green: 0.30, blue: 0.32)
+        case .night: return Color(red: 0.14, green: 0.16, blue: 0.34)
+        }
     }
 }
 

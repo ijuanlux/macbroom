@@ -8,6 +8,7 @@ struct ChatBottomBar: View {
     @State private var draft: String = ""
     @State private var autoFocusAttempted: Bool = false
     @FocusState private var focused: Bool
+    @AppStorage("macbroom.voiceEnabled") private var voiceEnabled: Bool = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -36,6 +37,48 @@ struct ChatBottomBar: View {
             if draft.isEmpty && !assistant.isThinking && assistant.messages.isEmpty {
                 suggestionPills
             }
+
+            // Voice toggle
+            Button {
+                voiceEnabled.toggle()
+                if !voiceEnabled { VoiceNarrator.shared.stop() }
+            } label: {
+                Image(systemName: voiceEnabled ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(voiceEnabled ? Theme.stripeGreen : .white.opacity(0.45))
+                    .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(.white.opacity(0.15), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .help(voiceEnabled ? "Voice on — tap to mute" : "Voice off — tap to enable")
+
+            // Roast button
+            Button {
+                NotificationCenter.default.post(name: .macbroomRoastMe, object: nil)
+            } label: {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(red: 0.95, green: 0.35, blue: 0.10))
+                    .frame(width: 26, height: 26)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(0.06))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .strokeBorder(Color(red: 0.95, green: 0.35, blue: 0.10).opacity(0.6), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(assistant.isThinking)
+            .help("Roast my Mac")
 
             Button(action: send) {
                 Image(systemName: assistant.isThinking ? "ellipsis" : "return")

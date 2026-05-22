@@ -24,7 +24,7 @@ struct OnboardingView: View {
 
     private let cards: [OnboardingCard] = [
         OnboardingCard(
-            kicker: "v0.5.0",
+            kicker: "v0.6.0",
             title: "Welcome to MacBroom",
             subtitle: "A free, open-source Mac cleaner with personality. CleanMyMac vibes, zero paywall.",
             systemImage: "wind",
