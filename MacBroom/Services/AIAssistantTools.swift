@@ -46,6 +46,7 @@ enum AIAssistantTools {
             MakeAppleBreakdanceTool(),
             MakeAppleSpidermanTool(),
             MakeAppleRyuTool(),
+            ListLargestAppsTool(),
         ]
     }
     #endif
@@ -300,6 +301,41 @@ struct MakeAppleRyuTool: Tool {
             NotificationCenter.default.post(name: .macbroomMakeAppleRyu, object: nil)
         }
         return "🥋 HADOUKEN incoming!"
+    }
+}
+
+/// Lists installed apps in /Applications by total size.
+@available(macOS 26.0, *)
+struct ListLargestAppsTool: Tool {
+    let name = "list_largest_apps"
+    let description = """
+    List installed applications from /Applications sorted by their on-disk \
+    size, largest first. Use when the user asks about biggest apps, what \
+    apps take the most space, "apps más grandes", "biggest installs", etc. \
+    Does NOT use search_large_files for this — apps live in /Applications, \
+    not Downloads/Documents.
+    """
+
+    @Generable struct Arguments {
+        @Guide(description: "Max apps to return (default 8, capped at 20).")
+        var limit: Int?
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        let limit = max(1, min(arguments.limit ?? 8, 20))
+        let scanner = await AppScanner()
+        await scanner.scan()
+        let apps = await scanner.apps
+        let top = apps.sorted { $0.appSize > $1.appSize }.prefix(limit)
+        if top.isEmpty { return "No installed apps found in /Applications." }
+        let combined = top.reduce(Int64(0)) { $0 + $1.appSize }
+        let listing = top.enumerated().map { idx, app in
+            "\(idx + 1). \(app.displayName) — \(FileSystemUtils.formatBytes(app.appSize))"
+        }.joined(separator: "\n")
+        return """
+        Top \(top.count) installed apps (\(FileSystemUtils.formatBytes(combined)) combined):
+        \(listing)
+        """
     }
 }
 
