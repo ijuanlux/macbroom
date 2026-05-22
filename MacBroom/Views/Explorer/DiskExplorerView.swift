@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 
 struct DiskExplorerView: View {
+    @EnvironmentObject private var appState: AppState
     @StateObject private var scanner = TreemapScanner()
     @State private var hovered: TreemapNode.ID?
 
@@ -49,6 +50,11 @@ struct DiskExplorerView: View {
         }
         .task {
             if scanner.children.isEmpty { await scanner.scan() }
+        }
+        .onChange(of: appState.requestedExplorerURL) { _, url in
+            guard let url else { return }
+            appState.requestedExplorerURL = nil
+            Task { await scanner.navigate(to: url) }
         }
     }
 

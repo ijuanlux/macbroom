@@ -74,6 +74,7 @@ final class LargeFilesScanner: ObservableObject {
             ) else { continue }
 
             for case let url as URL in enumerator {
+                if SafetyPreferences.shared.isExcluded(url) { continue }
                 let v = try? url.resourceValues(forKeys: keys)
                 if v?.isDirectory == true { continue }
                 let size = Int64(v?.totalFileAllocatedSize ?? v?.fileAllocatedSize ?? 0)

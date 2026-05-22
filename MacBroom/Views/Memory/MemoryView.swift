@@ -4,8 +4,10 @@ struct MemoryView: View {
     @State private var stats: MemoryStats = .zero
     @State private var isPurging: Bool = false
     @State private var lastResult: String?
+    @State private var topProcesses: [RunningProcess] = []
 
     private let refresh = Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+    private let procRefresh = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,15 +21,27 @@ struct MemoryView: View {
                     summaryCard
                     breakdownCard
                     actionCard
+                    topProcessesCard
                 }
                 .padding(24)
             }
         }
-        .onAppear { stats = MemoryReader.current() }
+        .onAppear {
+            stats = MemoryReader.current()
+            refreshProcesses()
+        }
         .onReceive(refresh) { _ in
             withAnimation(.easeInOut(duration: 0.4)) {
                 stats = MemoryReader.current()
             }
+        }
+        .onReceive(procRefresh) { _ in refreshProcesses() }
+    }
+
+    private func refreshProcesses() {
+        Task.detached(priority: .userInitiated) {
+            let procs = ProcessLister.topByMemory(limit: 10)
+            await MainActor.run { self.topProcesses = procs }
         }
     }
 
@@ -175,6 +189,53 @@ struct MemoryView: View {
         )
     }
 
+    // MARK: - Top processes
+
+    private var topProcessesCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Top RAM consumers")
+                    .font(.system(size: 14, weight: .semibold))
+                Spacer()
+                Button {
+                    refreshProcesses()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11))
+                }
+                .controlSize(.small)
+                .buttonStyle(.borderless)
+            }
+            if topProcesses.isEmpty {
+                HStack(spacing: 8) {
+                    SweepingBroomLoader(size: 20)
+                    Text("Reading process list…")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(topProcesses) { proc in
+                        ProcessRow(proc: proc) {
+                            ProcessLister.terminate(proc.pid)
+                            refreshProcesses()
+                        }
+                        if proc.id != topProcesses.last?.id {
+                            Divider().opacity(0.3).padding(.leading, 44)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(20)
+        .background(Theme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
     private func purge() async {
         let freeBefore = stats.free
         isPurging = true
@@ -190,6 +251,51 @@ struct MemoryView: View {
             lastResult = "Freed \(FileSystemUtils.formatBytes(freed)) of inactive memory."
         } else {
             lastResult = "Failed: \(result.errorMessage ?? "unknown error")"
+        }
+    }
+}
+
+private struct ProcessRow: View {
+    let proc: RunningProcess
+    let onKill: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            iconView
+                .frame(width: 22, height: 22)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(proc.displayName)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(1)
+                Text("PID \(proc.pid) · \(String(format: "%.1f", proc.cpuPercent))% CPU")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(FileSystemUtils.formatBytes(proc.rssBytes))
+                .font(.system(size: 12, design: .monospaced))
+                .foregroundStyle(.secondary)
+            Button(role: .destructive, action: onKill) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 14))
+            }
+            .buttonStyle(.borderless)
+            .foregroundStyle(Theme.stripeRed.opacity(0.8))
+            .help("Send SIGTERM to \(proc.displayName)")
+        }
+        .padding(.vertical, 6)
+    }
+
+    @ViewBuilder
+    private var iconView: some View {
+        if let url = proc.bundleURL {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path))
+                .resizable()
+                .interpolation(.medium)
+        } else {
+            Image(systemName: "terminal")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
         }
     }
 }

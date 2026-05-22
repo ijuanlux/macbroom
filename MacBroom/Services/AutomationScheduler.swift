@@ -1,10 +1,34 @@
 import Foundation
 
+enum SmartScanFrequency: String, CaseIterable, Identifiable {
+    case off, daily, weekly, monthly
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .off:     return "Off"
+        case .daily:   return "Daily"
+        case .weekly:  return "Weekly"
+        case .monthly: return "Monthly"
+        }
+    }
+    var seconds: TimeInterval? {
+        switch self {
+        case .off:     return nil
+        case .daily:   return 24 * 60 * 60
+        case .weekly:  return 7 * 24 * 60 * 60
+        case .monthly: return 30 * 24 * 60 * 60
+        }
+    }
+}
+
 @MainActor
 final class AutomationScheduler {
     static let shared = AutomationScheduler()
 
     private var diskActivity: NSBackgroundActivityScheduler?
+    private var scanActivity: NSBackgroundActivityScheduler?
+
+    var onScheduledSmartScan: (() async -> Int64)?
 
     private init() {}
 
@@ -30,6 +54,42 @@ final class AutomationScheduler {
     func stop() {
         diskActivity?.invalidate()
         diskActivity = nil
+    }
+
+    // MARK: - Smart Scan schedule
+
+    func startSmartScanSchedule(_ frequency: SmartScanFrequency) {
+        scanActivity?.invalidate()
+        scanActivity = nil
+        guard let interval = frequency.seconds else { return }
+
+        let activity = NSBackgroundActivityScheduler(
+            identifier: "com.juandediego.macbroom.smartscan"
+        )
+        activity.interval = interval
+        activity.tolerance = min(interval * 0.2, 60 * 60)   // up to 1 h tolerance
+        activity.repeats = true
+        activity.qualityOfService = .background
+
+        activity.schedule { [weak self] completion in
+            Task { @MainActor in
+                let reclaimed = await self?.onScheduledSmartScan?() ?? 0
+                if reclaimed > 0 {
+                    NotificationManager.shared.post(
+                        title: "Smart Scan reclaimed \(FileSystemUtils.formatBytes(reclaimed))",
+                        body: "Scheduled cleanup completed. Open MacBroom for details.",
+                        identifier: "macbroom.scheduledscan"
+                    )
+                }
+                completion(.finished)
+            }
+        }
+        scanActivity = activity
+    }
+
+    func stopSmartScanSchedule() {
+        scanActivity?.invalidate()
+        scanActivity = nil
     }
 
     nonisolated private func checkDiskSpace(thresholdPercent: Double) {

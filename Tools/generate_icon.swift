@@ -134,9 +134,14 @@ struct AppleSilhouette: Shape {
         let h = rect.height
         let cleft = CGPoint(x: w * 0.5, y: h * 0.10)
         p.move(to: cleft)
-        p.addCurve(to: CGPoint(x: w, y: h * 0.42),
+        p.addCurve(to: CGPoint(x: w * 1.00, y: h * 0.27),
                    control1: CGPoint(x: w * 0.70, y: -h * 0.04),
                    control2: CGPoint(x: w * 1.02, y: h * 0.10))
+        p.addArc(center: CGPoint(x: w * 1.00, y: h * 0.43),
+                 radius: h * 0.16,
+                 startAngle: .degrees(-90),
+                 endAngle: .degrees(90),
+                 clockwise: true)
         p.addCurve(to: CGPoint(x: w * 0.5, y: h),
                    control1: CGPoint(x: w * 1.02, y: h * 0.86),
                    control2: CGPoint(x: w * 0.78, y: h * 1.04))

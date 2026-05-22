@@ -69,6 +69,7 @@ final class CacheScanner: ObservableObject {
             ) else { continue }
 
             for entry in entries {
+                if SafetyPreferences.shared.isExcluded(entry) { continue }
                 let size = FileSystemUtils.size(of: entry)
                 if size <= 0 { continue }
                 let bundleId = inferBundleId(from: entry.lastPathComponent)

@@ -5,6 +5,8 @@ final class AppState: ObservableObject {
     @Published var selection: SidebarItem? = .dashboard
     @Published var splashDismissed: Bool = false
     @Published var paletteVisible: Bool = false
+    /// Set when the user drops a folder onto the Dock icon — DiskExplorerView reads + clears this.
+    @Published var requestedExplorerURL: URL?
 
     /// Increments every time a cleanup completes — drives confetti + toast.
     @Published private(set) var cleanupTrigger: Int = 0
@@ -16,5 +18,8 @@ final class AppState: ObservableObject {
         lastReclaimed = reclaimed
         cleanupTrigger += 1
         stats.record(reclaimed: reclaimed)
+        if reclaimed > 0 {
+            SoundEffects.playCleanup()
+        }
     }
 }

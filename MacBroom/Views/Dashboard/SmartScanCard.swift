@@ -13,11 +13,16 @@ struct SmartScanCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            content
+        VStack(spacing: 12) {
+            MacBroomCharacter(
+                size: 92,
+                phase: characterPhase,
+                onTap: triggerPrimaryAction
+            )
+            statusBlock
+                .padding(.bottom, 6)
         }
-        .padding(22)
+        .frame(maxWidth: .infinity)
         .background(cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -27,137 +32,80 @@ struct SmartScanCard: View {
         )
     }
 
-    // MARK: - Header
+    // MARK: - Phase bridging
 
-    private var header: some View {
-        HStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(LinearGradient(
-                        colors: stripes,
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing))
-                    .frame(width: 38, height: 38)
-                Image(systemName: "sparkles")
-                    .font(.system(size: 17, weight: .bold))
-                    .foregroundStyle(.white)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Smart Scan")
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                Text("One-click sweep of caches and developer junk")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    // MARK: - Body
-
-    @ViewBuilder
-    private var content: some View {
+    private var characterPhase: CharacterPhase {
         switch coordinator.phase {
-        case .idle:           idleContent
-        case .scanning:       scanningContent
-        case .ready(let bytes, let count): readyContent(bytes: bytes, count: count)
-        case .cleaning:       cleaningContent
-        case .done(let bytes): doneContent(reclaimed: bytes)
+        case .idle:                       return .idle
+        case .scanning:                   return .scanning
+        case .ready(let bytes, _):        return .ready(bytes: bytes)
+        case .cleaning:                   return .cleaning
+        case .done(let bytes):            return .done(reclaimed: bytes)
         }
     }
 
-    private var idleContent: some View {
-        HStack {
-            Text("Press to scan caches and developer artifacts in parallel.")
+    // MARK: - Status text under the apple
+
+    private var statusBlock: some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(titleStyle)
+
+            Text(statusText)
                 .font(.system(size: 13))
                 .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            RainbowButton("Smart Scan", systemImage: "sparkles") {
-                Task { await coordinator.scan() }
-            }
-        }
-    }
+                .multilineTextAlignment(.center)
+                .frame(minHeight: 32, alignment: .top)
+                .padding(.horizontal, 20)
 
-    private var scanningContent: some View {
-        HStack(spacing: 14) {
-            SweepingBroomLoader(size: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Sweeping your Mac…")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("Scanning caches, logs, dev artifacts, package caches")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-    }
-
-    private func readyContent(bytes: Int64, count: Int) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(FileSystemUtils.formatBytes(bytes))
-                    .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundStyle(stripesGradient)
-                Text("\(count) items ready to clean")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            VStack(spacing: 8) {
-                RainbowButton("Clean all", systemImage: "trash") {
-                    Task {
-                        let reclaimed = await coordinator.cleanAll()
-                        appState.signalCleanup(reclaimed: reclaimed)
-                    }
-                }
-                Button("Scan again") {
+            if case .done = coordinator.phase {
+                Button("Run another scan") {
                     Task { await coordinator.scan() }
                 }
-                .controlSize(.small)
                 .buttonStyle(.borderless)
+                .controlSize(.small)
                 .foregroundStyle(.secondary)
+                .padding(.top, 2)
             }
         }
     }
 
-    private var cleaningContent: some View {
-        HStack(spacing: 14) {
-            SweepingBroomLoader(size: 32)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Cleaning…")
-                    .font(.system(size: 14, weight: .semibold))
-                Text("Moving items to Trash")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
+    private var title: String {
+        switch coordinator.phase {
+        case .idle:        return "Smart Scan"
+        case .scanning:    return "Scanning…"
+        case .ready:       return "Reclaimable"
+        case .cleaning:    return "Cleaning…"
+        case .done:        return "All clean"
         }
     }
 
-    private func doneContent(reclaimed: Int64) -> some View {
-        HStack(alignment: .center, spacing: 16) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.seal.fill")
-                        .foregroundStyle(Theme.stripeGreen)
-                    Text(reclaimed > 0 ? "All clean" : "Already clean")
-                        .font(.system(size: 16, weight: .semibold))
-                }
-                if reclaimed > 0 {
-                    Text("Reclaimed \(FileSystemUtils.formatBytes(reclaimed))")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("No reclaimable junk found right now")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Spacer()
-            Button("Run again") {
-                Task { await coordinator.scan() }
-            }
-            .controlSize(.regular)
+    private var titleStyle: AnyShapeStyle {
+        switch coordinator.phase {
+        case .ready(let bytes, _) where bytes > 0:
+            return AnyShapeStyle(stripesGradient)
+        case .done(let bytes) where bytes > 0:
+            return AnyShapeStyle(Theme.stripeGreen)
+        default:
+            return AnyShapeStyle(.primary)
+        }
+    }
+
+    private var statusText: String {
+        switch coordinator.phase {
+        case .idle:
+            return "Tap the apple to sweep caches and developer junk in parallel."
+        case .scanning:
+            return "Sweeping caches, logs, dev artifacts and package caches…"
+        case .ready(let bytes, let count):
+            return "\(FileSystemUtils.formatBytes(bytes)) found in \(count) items — tap the apple to clean."
+        case .cleaning:
+            return "Moving everything to the Trash. Restore from there if you panic."
+        case .done(let bytes):
+            return bytes > 0
+                ? "Reclaimed \(FileSystemUtils.formatBytes(bytes)). Tap the apple to scan again."
+                : "Nothing to reclaim right now. Tap the apple anytime."
         }
     }
 
@@ -169,8 +117,23 @@ struct SmartScanCard: View {
             LinearGradient(colors: stripes,
                            startPoint: .topLeading,
                            endPoint: .bottomTrailing)
-                .opacity(0.08)
+                .opacity(0.06)
+        }
+    }
+
+    // MARK: - Action
+
+    private func triggerPrimaryAction() {
+        switch coordinator.phase {
+        case .idle, .done:
+            Task { await coordinator.scan() }
+        case .ready:
+            Task {
+                let reclaimed = await coordinator.cleanAll()
+                appState.signalCleanup(reclaimed: reclaimed)
+            }
+        case .scanning, .cleaning:
+            break
         }
     }
 }
-

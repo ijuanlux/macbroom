@@ -78,11 +78,9 @@ private struct SidebarRow: View {
 private struct BrandHeader: View {
     var body: some View {
         HStack(spacing: 10) {
-            AppIconView(size: 32)
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             Text("MacBroom")
-                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .foregroundStyle(LinearGradient.rainbow)
             Spacer()
         }
         .padding(.horizontal, 12)

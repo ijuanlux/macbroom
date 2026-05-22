@@ -128,6 +128,7 @@ final class DuplicateFinder: ObservableObject {
                 options: [.skipsHiddenFiles, .skipsPackageDescendants]
             ) else { continue }
             for case let url as URL in e {
+                if SafetyPreferences.shared.isExcluded(url) { continue }
                 let v = try? url.resourceValues(forKeys: keys)
                 if v?.isDirectory == true { continue }
                 let size = Int64(v?.totalFileAllocatedSize ?? v?.fileAllocatedSize ?? 0)

@@ -9,12 +9,40 @@ struct MacBroomApp: App {
     @AppStorage("macbroom.diskAlertThreshold") private var diskAlertThreshold: Double = 10
 
     init() {
+        let defaults = UserDefaults.standard
         // Restore disk watcher from last session.
-        if UserDefaults.standard.bool(forKey: "macbroom.autoDiskWatcher") {
-            let thr = UserDefaults.standard.double(forKey: "macbroom.diskAlertThreshold")
+        if defaults.bool(forKey: "macbroom.autoDiskWatcher") {
+            let thr = defaults.double(forKey: "macbroom.diskAlertThreshold")
             Task { @MainActor in
                 AutomationScheduler.shared.startDiskWatcher(thresholdPercent: thr > 0 ? thr : 10)
             }
+        }
+        // Restore Smart Scan schedule.
+        if let raw = defaults.string(forKey: "macbroom.scanFrequency"),
+           let freq = SmartScanFrequency(rawValue: raw), freq != .off {
+            let appStateLocal = self.appState
+            Task { @MainActor in
+                AutomationScheduler.shared.onScheduledSmartScan = {
+                    let coord = SmartScanCoordinator()
+                    await coord.scan()
+                    let reclaimed = await coord.cleanAll()
+                    if reclaimed > 0 {
+                        appStateLocal.signalCleanup(reclaimed: reclaimed)
+                    }
+                    return reclaimed
+                }
+                AutomationScheduler.shared.startSmartScanSchedule(freq)
+            }
+        }
+        // Restore menu-bar-only mode (if previously enabled).
+        if defaults.bool(forKey: "macbroom.menuBarOnly") {
+            Task { @MainActor in
+                DockVisibility.setShown(false)
+            }
+        }
+        // Snapshot disk space for the forecast trend.
+        Task { @MainActor in
+            DiskTrendStore.shared.snapshotIfNeeded()
         }
     }
 
@@ -41,8 +69,13 @@ struct MacBroomApp: App {
             SettingsView()
         }
 
-        MenuBarExtra("MacBroom", systemImage: "wind") {
+        MenuBarExtra {
             MenuBarContent()
+        } label: {
+            Image("MenuBarIcon")
+                .renderingMode(.original)
+                .resizable()
+                .frame(width: 22, height: 22)
         }
         .menuBarExtraStyle(.window)
     }
@@ -60,12 +93,20 @@ struct MacBroomApp: App {
             .preferredColorScheme(hackerMode ? .dark : theme.colorScheme)
             .tint(hackerMode ? hackerGreen : .accentColor)
             .fontDesign(hackerMode ? .monospaced : .default)
+            .onOpenURL { url in
+                // Drag a folder onto the Dock icon → jump straight to Disk Explorer in that folder.
+                guard url.isFileURL,
+                      (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else { return }
+                appState.selection = .explorer
+                appState.requestedExplorerURL = url
+            }
     }
 }
 
 private struct RootView: View {
     @EnvironmentObject private var appState: AppState
     @AppStorage("macbroom.hackerMode") private var hackerMode: Bool = false
+    @AppStorage("macbroom.onboardingShown") private var onboardingShown: Bool = false
     @State private var confettiFire: Bool = false
     @State private var toastVisible: Bool = false
 
@@ -94,6 +135,14 @@ private struct RootView: View {
             if !appState.splashDismissed {
                 SplashScreen { appState.splashDismissed = true }
                     .transition(.opacity)
+            }
+
+            if appState.splashDismissed && !onboardingShown {
+                OnboardingView {
+                    withAnimation(.easeOut(duration: 0.4)) { onboardingShown = true }
+                }
+                .transition(.opacity)
+                .zIndex(50)
             }
 
             if appState.paletteVisible {

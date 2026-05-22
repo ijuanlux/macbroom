@@ -14,6 +14,7 @@ struct DashboardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     SmartScanCard()
+                    ForecastBanner()
                     StatsCard()
                     storageCard
                     quickWinsSection

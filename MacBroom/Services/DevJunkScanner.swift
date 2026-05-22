@@ -158,6 +158,7 @@ final class DevJunkScanner: ObservableObject {
         for target in targets {
             let url = URL(fileURLWithPath: target.path)
             guard fm.fileExists(atPath: target.path) else { continue }
+            if SafetyPreferences.shared.isExcluded(url) { continue }
 
             if target.expandChildren,
                let children = try? fm.contentsOfDirectory(
