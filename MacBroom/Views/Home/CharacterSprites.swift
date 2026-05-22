@@ -113,32 +113,42 @@ enum CharacterPalette {
 /// Big, recognizable apple character with bigger glasses that stick out of the head
 /// and longer legs. 18 columns × 30 rows tall total (22 body + 6 leg + 2 shoes).
 enum AppleSprites {
+    // Redesigned to read as a classic Apple-logo apple:
+    //  • Leaf angled to the upper-right (not centered) like the real mark.
+    //  • Two-lobe top with a notch where the stem meets the body.
+    //  • Iconic circular bite carved into the right side at mid-body.
+    //  • Sleeker thug-life shades: solid black wraparound bar with two
+    //    chunky white lens reflections — no awkward bridge cutout.
+    //  • Rainbow stripes kept (homage to the 77-98 logo era).
+    //  • Glossy 2-px highlight on the orange band like real fruit.
+    //  Dimensions unchanged (18 cols × 23 rows) so arms / legs / headband /
+    //  headphones / Ryu/Spider/Hulk/etc palettes all keep working.
     private static let bodyIdle: [[Int]] = [
         //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
-        [0, 0, 0, 0, 0, 0, 0, 0, 7, 7, 0, 0, 0, 0, 0, 0, 0, 0], // leaf
-        [0, 0, 0, 0, 0, 0, 0, 7, 7,14, 7, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 7, 7,14,14, 7, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 7,14, 9, 7, 0, 0, 0, 0, 0, 0, 0, 0],
-        [0, 0, 0, 0, 0, 0, 0, 9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0], // stem
-        [0, 0, 0, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0], // top outline
-        [0, 0, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0, 0, 0],
-        [0, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0, 0],
-        // Thug-life glasses — extra chunky, full row of solid black on top + tabs
-        [11,11,11,11,11,11,11,11, 1,11,11,11,11,11,11,11,11,11],
-        [11,11,11,11,11,11,11, 1, 1, 1,11,11,11,11,11,11,11,11],
-        [11,11,12,12,12,11,11, 1, 1, 1,11,12,12,12,11,11,11,11],
-        [11,11,12,12,12,11,11,11, 1,11,11,12,12,12,11,11,11,11],
-        [11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11,11],
-        [0, 8, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 8, 0], // yellow
-        [0, 8, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 0], // orange
-        [0, 8, 3, 3,12,12, 3, 3, 3, 3, 3, 3, 3, 0, 0, 0, 0, 0], // highlight + bite
-        [0, 8, 4, 4, 4, 4,11,11,11,11, 4, 4, 4, 0, 0, 0, 0, 0], // mouth + bite
-        [0, 8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 0, 0, 0, 0],
-        [0, 8, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 8, 0, 0, 0],
-        [0, 8, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 8, 0, 0, 0],
-        [0, 8, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 8, 0, 0, 0],
-        [0, 0, 8, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 8, 0, 0, 0, 0],
-        [0, 0, 0, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 7,14, 0, 0, 0, 0, 0], // 0  leaf tip
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 7, 7,14, 7, 0, 0, 0, 0, 0], // 1  leaf grows
+        [0, 0, 0, 0, 0, 0, 0, 0, 7,14,14, 7, 0, 0, 0, 0, 0, 0], // 2  leaf widest
+        [0, 0, 0, 0, 0, 0, 0, 9, 9, 7, 7, 0, 0, 0, 0, 0, 0, 0], // 3  stem + leaf base
+        [0, 0, 0, 0, 0, 0, 0, 9, 9, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 4  stem
+        [0, 0, 0, 0, 8, 8, 8, 0, 8, 8, 8, 8, 0, 0, 0, 0, 0, 0], // 5  double-lobe + stem notch
+        [0, 0, 8, 8, 1, 1, 1, 8, 1, 1, 1, 1, 8, 8, 0, 0, 0, 0], // 6  lobes filled green
+        [0, 8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0, 0], // 7  green band
+        [8, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 8, 0], // 8  widest green
+        // Thug-life shades — chunky black bar w/ two white lens reflections
+        [8, 2,11,11,11,11,11,11,11,11,11,11,11,11,11, 2, 8, 0], // 9  top of frame
+        [8, 2,11,11,12,12,11,11,11,11,11,11,12,12,11, 2, 8, 0], // 10 small reflections
+        [8, 2,11,12,12,12,11,11,11,11,11,11,12,12,12, 2, 8, 0], // 11 bigger reflections
+        [8, 2,11,11,11,11,11,11,11,11,11,11,11,11,11, 2, 8, 0], // 12 bottom of frame
+        [8, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 8, 0], // 13 yellow band
+        [8, 3, 3,12,12, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 0, 0], // 14 orange + gloss, bite begins
+        [8, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 8, 0, 0, 0, 0], // 15 orange, bite deeper
+        [8, 4, 4, 4, 4, 4, 4,11,11,11, 4, 4, 8, 0, 0, 0, 0, 0], // 16 red + mouth, bite deepest
+        [8, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 8, 0, 0, 0, 0, 0], // 17 red, bite holds
+        [8, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 8, 0, 0], // 18 purple, bite closes
+        [8, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 8, 0], // 19 purple full
+        [0, 8, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 8, 0, 0], // 20 blue narrows
+        [0, 0, 8, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 8, 0, 0, 0], // 21 blue narrower
+        [0, 0, 0, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 0, 0, 0, 0, 0], // 22 bottom curve
     ]
 
     /// Idle pose: legs together, long.

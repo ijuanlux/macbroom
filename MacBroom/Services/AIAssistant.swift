@@ -239,8 +239,15 @@ final class AIAssistant: ObservableObject {
                    notification: .macbroomMakeAppleBreakdance),
             Intent(keywords: ["dance", "baila", "música", "musica", "vibe", "dj"],
                    notification: .macbroomMakeAppleDance),
-            Intent(keywords: ["clean my mac", "limpia mi mac", "limpia la mac", "sweep my mac"],
-                   notification: .macbroomRunFullCleanup),
+            // Aggressive cleanup detection — Spanish "limpia" anywhere or any
+            // form of clean/sweep/cleanup in English. Off-topic phrases like
+            // "clean code" are filtered out before reaching here.
+            Intent(keywords: [
+                "limpia", "limpieza", "limpiame", "escanea", "barre",
+                "clean my", "clean it", "clean this", "clean up", "cleanup",
+                "clean the", "clean all", "sweep", "do it bro", "do it now",
+                "scan and clean", "scan and", "escanea y", "limpia y"
+            ], notification: .macbroomRunFullCleanup),
         ]
         for intent in intents {
             if intent.keywords.contains(where: { lower.contains($0) }) {

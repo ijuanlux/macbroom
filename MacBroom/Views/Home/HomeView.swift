@@ -334,9 +334,10 @@ struct HomeView: View {
             stickyNote
                 .position(x: size.width * 0.86, y: size.height * 0.50)
 
-            // Floor furniture
-            bookshelf
-                .position(x: size.width * 0.08, y: size.height - floorH - 50)
+            // Floor furniture — Neo Geo CRT instead of the bookshelf, with
+            // rotating mini-game animations on screen.
+            NeoGeoTV()
+                .position(x: size.width * 0.07, y: size.height - floorH - 56)
             plant
                 .position(x: size.width * 0.88, y: size.height - floorH - 38)
             lamp
