@@ -150,22 +150,53 @@ final class AIAssistant: ObservableObject {
             }
             do {
                 let response = try await session.respond(to: trimmed)
-                // The local model often writes tool names as plain text
-                // instead of invoking them. Detect them, fire the
-                // corresponding notifications, and strip them from the bubble.
                 let cleaned = extractAndDispatchTools(from: response.content)
                 messages.append(.assistant(cleaned))
                 let collected = AIAssistantTools.drainActions()
-                if !collected.isEmpty {
-                    pendingActions = collected
-                }
+                if !collected.isEmpty { pendingActions = collected }
+                return
             } catch {
-                messages.append(.assistant("Hmm, that didn't work: \(error.localizedDescription)"))
+                // Local model occasionally hiccups with -1 (saturated, context
+                // full, etc). Reset the session and try once more silently
+                // before surfacing a friendly error.
+                sessionStorage = nil
+                if let retrySession = ensureSession(),
+                   let retry = try? await retrySession.respond(to: trimmed) {
+                    let cleaned = extractAndDispatchTools(from: retry.content)
+                    messages.append(.assistant(cleaned))
+                    let collected = AIAssistantTools.drainActions()
+                    if !collected.isEmpty { pendingActions = collected }
+                    return
+                }
+                messages.append(.assistant(Self.friendlyError(for: error)))
             }
             return
             #endif
         }
         messages.append(.assistant("AI Assistant requires macOS 26 or newer."))
+    }
+
+    /// Maps raw model errors to bro-style messages that don't leak stack
+    /// traces or framework names to the user.
+    private static func friendlyError(for error: Error) -> String {
+        let raw = error.localizedDescription.lowercased()
+        if raw.contains("guardrail") || raw.contains("safety") {
+            return "bro can't help with that one 🤐"
+        }
+        if raw.contains("context") || raw.contains("token") {
+            return "memoria llena, dame un sec y vuelve a probar 🧠"
+        }
+        if raw.contains("network") || raw.contains("offline") {
+            return "model offline rn — local boi needs a sec"
+        }
+        // Generic fallback — saturated / -1 / unknown
+        return [
+            "uff bro, cortocircuito. dale otra 🔌",
+            "lag attack — try again",
+            "se me cruzaron los cables, repite plz",
+            "👀 hiccup. send it again.",
+            "system error, but my vibes still slap. try once more",
+        ].randomElement() ?? "try again bro"
     }
 
     /// Catches obvious intent in the raw user input and fires the matching
