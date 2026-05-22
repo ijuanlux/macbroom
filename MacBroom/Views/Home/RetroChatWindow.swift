@@ -6,6 +6,7 @@ import SwiftUI
 struct ChatBottomBar: View {
     @StateObject private var assistant = AIAssistant.shared
     @State private var draft: String = ""
+    @State private var autoFocusAttempted: Bool = false
     @FocusState private var focused: Bool
 
     var body: some View {
@@ -23,8 +24,13 @@ struct ChatBottomBar: View {
                 .font(.system(size: 13, design: .monospaced))
                 .foregroundStyle(.white)
                 .focused($focused)
+                .opacity(assistant.isThinking ? 0.55 : 1)
                 .onSubmit { send() }
-                .disabled(assistant.isThinking)
+                .onChange(of: assistant.isThinking) { _, thinking in
+                    // When the model finishes thinking, snap focus back to the
+                    // input so the user can keep chatting without re-clicking.
+                    if !thinking { focused = true }
+                }
 
             // Quick-suggestion pills shown when input is empty + no thinking
             if draft.isEmpty && !assistant.isThinking && assistant.messages.isEmpty {
@@ -44,7 +50,6 @@ struct ChatBottomBar: View {
             }
             .buttonStyle(.plain)
             .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || assistant.isThinking)
-            .keyboardShortcut(.return, modifiers: [])
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 9)
@@ -94,6 +99,9 @@ struct ChatBottomBar: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !assistant.isThinking else { return }
         draft = ""
+        // Keep focus on the field — the user (and screencap automation) can
+        // immediately send another message without re-clicking the bar.
+        focused = true
         Task { await assistant.ask(text) }
     }
 }

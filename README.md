@@ -46,11 +46,44 @@
 
 ## Screenshots
 
-> Drop screenshots at `docs/screenshots/` and they will render here.
+### Meet your apple
 
-| Dashboard | Hacker Mode | Disk Explorer |
+The Home scene is a tiny lived-in room with a pixel-art apple character that actually sweeps, sips coke, dances, breakdances, web-swings, and karate-fights your trash.
+
+<p align="center">
+  <img src="docs/screenshots/01-home.png" width="780" alt="Home — the apple in his retro room with posters of V, AC/DC, Madonna, E.T., Back to the Future, Pac-Man, and Street Fighter II" />
+</p>
+
+### Ask MacBroom — on-device AI assistant
+
+On macOS 26+, type questions in plain language at the bottom bar. MacBroom answers as a chunky speech bubble above the apple's head and can drive real cleanups + animations via Foundation Models tool calling.
+
+<p align="center">
+  <img src="docs/screenshots/15-ai-disk-info.png" width="780" alt="AI chat — apple bubble with disk info, chat bar at the bottom of the scene" />
+</p>
+
+| Ryu mode | Spider-Man mode | DJ mode |
 | :---: | :---: | :---: |
-| `docs/screenshots/dashboard.png` | `docs/screenshots/hacker.png` | `docs/screenshots/explorer.png` |
+| <img src="docs/screenshots/17-ai-ryu-hadouken.png" alt="Apple in white karate gi firing Hadoukens" /> | <img src="docs/screenshots/18-ai-spiderman-climbing.png" alt="Apple in red and blue Spider-Man suit" /> | <img src="docs/screenshots/19-ai-dance.png" alt="Apple with DJ headphones and iPod" /> |
+| `"go ryu and destroy the trash"` | `"be spiderman"` | `"make the apple dance"` |
+
+### Sections
+
+| Dashboard | Caches | Dev Junk |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/02-dashboard.png" alt="Dashboard with Smart Scan + storage breakdown" /> | <img src="docs/screenshots/03-caches.png" alt="Caches scanner grouped by app" /> | <img src="docs/screenshots/04-dev-junk.png" alt="Dev junk scanner — node_modules, DerivedData, etc" /> |
+| **Uninstaller** | **Large Files** | **Duplicates** |
+| <img src="docs/screenshots/05-uninstaller.png" alt="Uninstaller listing apps + leftover support files" /> | <img src="docs/screenshots/06-large-files.png" alt="Large files > 100 MB across Downloads/Documents/Desktop" /> | <img src="docs/screenshots/07-duplicates.png" alt="Duplicate finder via SHA-256" /> |
+| **Privacy** | **Mail & Downloads** | **Memory** |
+| <img src="docs/screenshots/08-privacy.png" alt="Privacy cleanup — recent files, QuickLook thumbs, browser data" /> | <img src="docs/screenshots/09-mail.png" alt="Mail attachments + old Downloads" /> | <img src="docs/screenshots/10-memory.png" alt="Live RAM pressure tracker" /> |
+| **Maintenance** | **Disk Explorer** | **Startup** |
+| <img src="docs/screenshots/11-maintenance.png" alt="System maintenance — flush DNS, rebuild Spotlight, etc" /> | <img src="docs/screenshots/12-disk-explorer.png" alt="Disk Explorer treemap" /> | <img src="docs/screenshots/13-startup.png" alt="Startup items — LaunchAgents and LaunchDaemons" /> |
+
+### Hacker Mode
+
+<p align="center">
+  <img src="docs/screenshots/14-hacker-mode.png" width="780" alt="Hacker Mode — green-on-black terminal aesthetic with matrix rain and live disk stats" />
+</p>
 
 ## Build from source
 
