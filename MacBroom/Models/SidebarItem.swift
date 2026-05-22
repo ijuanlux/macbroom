@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
+    case home
     case dashboard
     case caches
     case devJunk
@@ -19,6 +20,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 
     var title: String {
         switch self {
+        case .home:        return "Home"
         case .dashboard:   return "Dashboard"
         case .caches:      return "Caches"
         case .devJunk:     return "Dev Junk"
@@ -37,6 +39,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 
     var systemImage: String {
         switch self {
+        case .home:        return "house.fill"
         case .dashboard:   return "internaldrive"
         case .caches:      return "tray.full"
         case .devJunk:     return "hammer"
@@ -55,6 +58,7 @@ enum SidebarItem: String, CaseIterable, Identifiable, Hashable {
 
     var tint: Color {
         switch self {
+        case .home:        return Theme.stripeOrange
         case .dashboard:   return Theme.stripeBlue
         case .caches:      return Theme.stripeGreen
         case .devJunk:     return Theme.stripePurple

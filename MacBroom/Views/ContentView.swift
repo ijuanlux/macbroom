@@ -37,7 +37,8 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detail: some View {
-        switch appState.selection ?? .dashboard {
+        switch appState.selection ?? .home {
+        case .home:        HomeView()
         case .dashboard:   DashboardView()
         case .caches:      CachesView()
         case .devJunk:     DevJunkView()
