@@ -49,6 +49,12 @@ struct HomeView: View {
     @State private var hintText: String?
     @State private var hintTimer: Timer?
     @State private var hintPulse: Bool = false
+    @StateObject private var aiAssistant = AIAssistant.shared
+    @State private var isBreakdancing: Bool = false
+    @State private var breakdanceRotation: Double = 0
+    @State private var isSpiderman: Bool = false
+    @State private var spiderClimb: CGFloat = 0       // 0 = floor, 1 = ceiling
+    @State private var webVisible: Bool = false
     @AppStorage("macbroom.tutorialSeen") private var tutorialSeen: Bool = false
     private let chairXRatio: CGFloat = 0.42
 
@@ -129,6 +135,7 @@ struct HomeView: View {
                 ForEach(trash) { item in
                     trashView(item, sceneSize: geo.size)
                 }
+                spiderWebOverlay(sceneSize: geo.size)
                 characterView(sceneSize: geo.size)
                 armOverlay(sceneSize: geo.size)
                 if isListeningToMusic {
@@ -137,8 +144,10 @@ struct HomeView: View {
                 if hasCoke && isSitting {
                     cokeView(sceneSize: geo.size)
                 }
+                aiSpeechBubbleView(sceneSize: geo.size)
                 tutorialHintView(sceneSize: geo.size)
                 statusOverlay(sceneSize: geo.size)
+                chatBottomBarView(sceneSize: geo.size)
             }
             .frame(width: geo.size.width, height: geo.size.height)
             .onAppear { currentSceneSize = geo.size }
@@ -149,6 +158,19 @@ struct HomeView: View {
         .onDisappear(perform: teardown)
         .onChange(of: coordinator.phase) { _, newPhase in
             handlePhase(newPhase)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macbroomRunFullCleanup)) { _ in
+            Task { await runFullCleanupFromAI() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleDance)) { _ in
+            musicTask?.cancel()
+            musicTask = Task { await musicBreak() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleBreakdance)) { _ in
+            Task { await breakdance() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleSpiderman)) { _ in
+            Task { await goSpiderman() }
         }
     }
 
@@ -849,8 +871,13 @@ struct HomeView: View {
         // Sit: butt rests on the chair seat (small lift, plus a few px right onto the seat).
         let sitYOffset: CGFloat = isSitting ? -pixelScale * 2 : 0
         let sitXOffset: CGFloat = isSitting ? pixelScale * 2 : 0
+        // Spider-Man climb: lift up to the ceiling area (5% from top).
+        let baseCharY = floorY - spriteHeight / 2 + pixelScale * 2
+        let ceilingY = sceneSize.height * 0.10
+        let spiderYOffset: CGFloat = -spiderClimb * max(0, baseCharY - ceilingY)
         let charX = charXRatio * sceneSize.width + sitXOffset + danceOffset
-        let charY = floorY - spriteHeight / 2 + pixelScale * 2 + sitYOffset
+        let charY = baseCharY + sitYOffset + spiderYOffset
+        let palette = isSpiderman ? CharacterPalette.spiderman : CharacterPalette.colors
         return ZStack(alignment: .topLeading) {
             // Broom on the back side (opposite of facing) — visible even when carrying.
             if holdingBroom {
@@ -858,7 +885,7 @@ struct HomeView: View {
                     .offset(x: pixelScale * (facing > 0 ? -3 : 14), y: pixelScale * 11)
             }
             ZStack(alignment: .topLeading) {
-                PixelSprite(pixels: pixels, palette: CharacterPalette.colors, scale: pixelScale)
+                PixelSprite(pixels: pixels, palette: palette, scale: pixelScale)
                     .shadow(color: Theme.stripeOrange.opacity(0.55), radius: 16)
                 if isListeningToMusic {
                     PixelSprite(pixels: HeadphoneSprites.dj,
@@ -869,12 +896,43 @@ struct HomeView: View {
                 }
             }
             .scaleEffect(x: facing, y: 1)
+            .rotationEffect(.degrees(breakdanceRotation))
         }
         .position(x: charX, y: charY)
         .animation(.linear(duration: 0.35), value: charXRatio)
         .animation(.easeInOut(duration: 0.4), value: isSitting)
         .animation(.easeInOut(duration: 0.18), value: danceOffset)
+        .animation(.easeInOut(duration: 1.1), value: spiderClimb)
         .onTapGesture { triggerPrimaryAction() }
+    }
+
+    /// Three parallel white lines from the apple's hand up to the ceiling —
+    /// reads as a triple-strand web rope.
+    @ViewBuilder
+    private func spiderWebOverlay(sceneSize: CGSize) -> some View {
+        if webVisible {
+            let charSpriteHeight = CGFloat(AppleSprites.idle.count) * pixelScale
+            let floorY = sceneSize.height - sceneSize.height * floorHeightRatio
+            let baseCharY = floorY - charSpriteHeight / 2 + pixelScale * 2
+            let ceilingY = sceneSize.height * 0.10
+            let spiderYOffset = -spiderClimb * max(0, baseCharY - ceilingY)
+            let charX = charXRatio * sceneSize.width + danceOffset
+            let webTopY = sceneSize.height * 0.03
+            let webBottomY = baseCharY + spiderYOffset - charSpriteHeight / 2 + pixelScale * 4
+            ZStack {
+                ForEach(-1...1, id: \.self) { i in
+                    let xOffset = CGFloat(i) * 2.5
+                    Path { p in
+                        p.move(to: CGPoint(x: charX + xOffset, y: webTopY))
+                        p.addLine(to: CGPoint(x: charX + xOffset, y: webBottomY))
+                    }
+                    .stroke(Color.white.opacity(i == 0 ? 0.95 : 0.55),
+                            style: StrokeStyle(lineWidth: i == 0 ? 2 : 1, lineCap: .round))
+                }
+            }
+            .animation(.easeInOut(duration: 1.1), value: spiderClimb)
+            .transition(.opacity)
+        }
     }
 
     /// iPod held in the front hand during music breaks. Position matches the
@@ -1040,6 +1098,68 @@ struct HomeView: View {
         hintTimer = nil
         withAnimation(.easeIn(duration: 0.25)) { hintText = nil }
         hintPulse = false
+    }
+
+    // MARK: - AI chat surface
+
+    /// Horizontal input bar pinned to the bottom of the scene.
+    @ViewBuilder
+    private func chatBottomBarView(sceneSize: CGSize) -> some View {
+        if aiAssistant.isAvailable {
+            VStack {
+                Spacer()
+                ChatBottomBar()
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+            }
+            .frame(width: sceneSize.width, height: sceneSize.height)
+            .allowsHitTesting(true)
+        }
+    }
+
+    /// Large chunky speech bubble shown above the apple when AI is responding
+    /// or has a recent message. Follows the character's position.
+    @ViewBuilder
+    private func aiSpeechBubbleView(sceneSize: CGSize) -> some View {
+        if let bubbleContent = currentAIBubble {
+            let charSpriteHeight = CGFloat(AppleSprites.idle.count) * pixelScale
+            let floorY = sceneSize.height - sceneSize.height * floorHeightRatio
+            let sitYOffset: CGFloat = isSitting ? -pixelScale * 2 : 0
+            let sitXOffset: CGFloat = isSitting ? pixelScale * 2 : 0
+            let charX = charXRatio * sceneSize.width + sitXOffset + danceOffset
+            let charTopY = floorY - charSpriteHeight + pixelScale * 2 + sitYOffset
+            AISpeechBubble(
+                text: bubbleContent.text,
+                isThinking: bubbleContent.isThinking,
+                actions: aiAssistant.pendingActions,
+                onActionTapped: { action in
+                    Task {
+                        let result = await action.perform()
+                        await MainActor.run {
+                            aiAssistant.consumeAction(action.id)
+                            aiAssistant.appendAssistant(result)
+                        }
+                    }
+                }
+            )
+            .position(x: min(max(200, charX + 110), sceneSize.width - 200),
+                      y: max(120, charTopY - 90))
+            .transition(.opacity.combined(with: .scale(scale: 0.85, anchor: .bottomLeading)))
+            .animation(.easeOut(duration: 0.28), value: bubbleContent.text)
+            .animation(.easeOut(duration: 0.28), value: bubbleContent.isThinking)
+            .zIndex(40)
+        }
+    }
+
+    /// The most recent assistant message, or "thinking…" while a response is in flight.
+    private var currentAIBubble: (text: String, isThinking: Bool)? {
+        if aiAssistant.isThinking {
+            return ("", true)
+        }
+        if let last = aiAssistant.messages.last(where: { $0.role == .assistant }) {
+            return (last.content, false)
+        }
+        return nil
     }
 
     // MARK: - Status overlay
@@ -1417,6 +1537,103 @@ struct HomeView: View {
             }
             flyingItems.removeValue(forKey: item.id)
         }
+    }
+
+    // MARK: - AI-triggered animations
+
+    /// Called when the AI assistant (or one of its action buttons) requests a
+    /// full cleanup. Restores a fresh batch of visual trash so the apple has
+    /// something to sweep up, then runs the normal scan + clean coordinator
+    /// flow which drives all the character animations via `handlePhase`.
+    private func runFullCleanupFromAI() async {
+        // Don't double-trigger
+        if coordinator.phase == .scanning || coordinator.phase == .cleaning { return }
+        cancelMusicBreakIfActive()
+        if isSitting {
+            withAnimation(.easeOut(duration: 0.35)) { hasCoke = false }
+            stopCokeSippingTimer()
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            withAnimation(.easeInOut(duration: 0.4)) { isSitting = false }
+            stopLegSwingTimer()
+            try? await Task.sleep(nanoseconds: 350_000_000)
+        }
+        // If the floor is empty, refresh some visual trash so the sweep is satisfying
+        if trash.allSatisfy({ $0.state == .inCan }) {
+            trash = HomeView.defaultTrash()
+            inCanCount = 0
+        }
+        await coordinator.scan()
+        try? await Task.sleep(nanoseconds: 600_000_000)
+        if case .ready = coordinator.phase {
+            let reclaimed = await coordinator.cleanAll()
+            appState.signalCleanup(reclaimed: reclaimed)
+        }
+    }
+
+    /// Breakdance: cancel idle motion, spin the sprite multiple times.
+    private func breakdance() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run {
+            isSitting = false
+            isBreakdancing = true
+        }
+        speak("BREAKDANCE TIME 🕺", duration: 3.0)
+        let spins = 8
+        for _ in 0..<spins {
+            await MainActor.run {
+                withAnimation(.linear(duration: 0.45)) {
+                    breakdanceRotation += 360
+                }
+            }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+        }
+        await MainActor.run {
+            isBreakdancing = false
+            breakdanceRotation = 0
+        }
+        speak("yeah baby", duration: 2.0)
+    }
+
+    /// Spider-Man sequence: suit up → web shoot → climb to ceiling → hang →
+    /// drop back down. Two climb cycles for extra drama.
+    private func goSpiderman() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run {
+            isSitting = false
+            isSpiderman = true
+        }
+        speak("WITH GREAT POWER… 🕷️", duration: 2.0)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // Cycle 1: thwip, climb up, hang, drop
+        speak("THWIP! 🕸️", duration: 1.3)
+        await MainActor.run {
+            withAnimation(.easeOut(duration: 0.35)) { webVisible = true }
+        }
+        try? await Task.sleep(nanoseconds: 400_000_000)
+        await MainActor.run { spiderClimb = 1 }
+        try? await Task.sleep(nanoseconds: 1_300_000_000)
+        speak("hanging out 🕷️", duration: 2.0)
+        try? await Task.sleep(nanoseconds: 1_800_000_000)
+        await MainActor.run { spiderClimb = 0 }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        // Cycle 2: shorter, just a quick up + down
+        speak("AGAIN! 🕸️", duration: 1.0)
+        await MainActor.run { spiderClimb = 1 }
+        try? await Task.sleep(nanoseconds: 1_300_000_000)
+        await MainActor.run { spiderClimb = 0 }
+        try? await Task.sleep(nanoseconds: 1_200_000_000)
+
+        // Wind down
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.4)) { webVisible = false }
+        }
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.4)) { isSpiderman = false }
+        }
+        speak("your friendly neighbourhood MacBroom", duration: 3.0)
     }
 
     private func standUpThenScan() async {

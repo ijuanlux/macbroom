@@ -36,6 +36,22 @@ enum CharacterPalette {
         Color(red: 0.92, green: 0.30, blue: 0.26),    // 15 headphone accent (red)
         Color(red: 0.55, green: 0.55, blue: 0.60),    // 16 ipod silver
     ]
+
+    /// Spider-Man palette: rainbow stripes swapped for alternating red/blue.
+    /// Leaf, stem, glasses, legs and shoes stay intact so the apple is still
+    /// recognisable through the costume.
+    static let spiderman: [Color] = {
+        var c = colors
+        let red  = Color(red: 0.85, green: 0.14, blue: 0.18)
+        let blue = Color(red: 0.10, green: 0.22, blue: 0.62)
+        c[1] = red    // was green stripe
+        c[2] = blue   // was yellow stripe
+        c[3] = red    // was orange stripe
+        c[4] = blue   // was red mouth row (becomes a chunky blue accent)
+        c[5] = red    // was purple stripe
+        c[6] = blue   // was blue stripe (kept blue)
+        return c
+    }()
 }
 
 /// Big, recognizable apple character with bigger glasses that stick out of the head

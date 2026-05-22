@@ -1,0 +1,314 @@
+import Foundation
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
+
+/// Notification names used by AI tools to drive Home-scene animations.
+/// HomeView subscribes and runs the matching local animation.
+extension Notification.Name {
+    static let macbroomRunFullCleanup    = Notification.Name("macbroom.ai.runFullCleanup")
+    static let macbroomMakeAppleDance    = Notification.Name("macbroom.ai.makeAppleDance")
+    static let macbroomMakeAppleBreakdance = Notification.Name("macbroom.ai.makeAppleBreakdance")
+    static let macbroomMakeAppleSpiderman  = Notification.Name("macbroom.ai.makeAppleSpiderman")
+}
+
+/// Read-only tools exposed to the Foundation Models session.
+/// Each tool wraps an existing scanner, returns a plain-text summary the model
+/// can quote, and optionally pushes a `AIChatAction` so the UI can offer a
+/// "Clean now" button — destructive work always requires a user click.
+enum AIAssistantTools {
+
+    /// Drained by `AIAssistant.ask` at the end of a turn.
+    @MainActor private static var collectedActions: [AIChatAction] = []
+
+    @MainActor static func drainActions() -> [AIChatAction] {
+        let a = collectedActions
+        collectedActions = []
+        return a
+    }
+
+    @MainActor static func push(_ action: AIChatAction) {
+        collectedActions.append(action)
+    }
+
+    #if canImport(FoundationModels)
+    @available(macOS 26.0, *)
+    static func all() -> [any Tool] {
+        return [
+            SearchLargeFilesTool(),
+            FindDevJunkTool(),
+            AnalyzeCachesTool(),
+            FindDuplicatesTool(),
+            GetDiskInfoTool(),
+            CleanMyMacTool(),
+            MakeAppleDanceTool(),
+            MakeAppleBreakdanceTool(),
+            MakeAppleSpidermanTool(),
+        ]
+    }
+    #endif
+}
+
+#if canImport(FoundationModels)
+
+// MARK: - Search large files
+
+@available(macOS 26.0, *)
+struct SearchLargeFilesTool: Tool {
+    let name = "search_large_files"
+    let description = """
+    Search the user's home directory for files larger than a given size in \
+    megabytes. Use this when the user asks about big files, space hogs, large \
+    videos, downloads, archives, etc.
+    """
+
+    @Generable
+    struct Arguments {
+        @Guide(description: "Minimum file size in megabytes (e.g. 100, 500, 1000).")
+        var minSizeMB: Int
+    }
+
+    func call(arguments: Arguments) async throws -> String {
+        let threshold = max(1, arguments.minSizeMB)
+        let bytes = Int64(threshold) * 1024 * 1024
+        let scanner = await LargeFilesScanner()
+        await scanner.scan(threshold: bytes)
+        let items = await scanner.items
+        let total = await scanner.totalSize
+        if items.isEmpty {
+            return "No files larger than \(threshold) MB found in the user's home directory."
+        }
+        let top = items.prefix(5).map { item in
+            "\(item.url.lastPathComponent) — \(FileSystemUtils.formatBytes(item.sizeBytes)) (in \(item.parentLabel))"
+        }.joined(separator: "; ")
+        return """
+        Found \(items.count) files larger than \(threshold) MB, totaling \
+        \(FileSystemUtils.formatBytes(total)). Top items: \(top).
+        """
+    }
+}
+
+// MARK: - Dev junk
+
+@available(macOS 26.0, *)
+struct FindDevJunkTool: Tool {
+    let name = "find_dev_junk"
+    let description = """
+    Scan for developer junk: node_modules, Xcode DerivedData, .gradle, Pods, \
+    .next, target/ folders, Carthage builds, Swift Package caches. Use this \
+    when the user asks about node_modules, Xcode caches, dev folders, build \
+    artifacts, "dev junk", etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        let scanner = await DevJunkScanner()
+        await scanner.scan()
+        let items = await scanner.items
+        let total = await scanner.totalSize
+        if items.isEmpty {
+            return "No developer junk found."
+        }
+        let topNames = items.prefix(4).map { "\($0.displayName) (\(FileSystemUtils.formatBytes($0.sizeBytes)))" }
+            .joined(separator: ", ")
+        await MainActor.run {
+            AIAssistantTools.push(AIChatAction(
+                label: "Clean now · \(FileSystemUtils.formatBytes(total))",
+                systemImage: "hammer.fill"
+            ) {
+                NotificationCenter.default.post(name: .macbroomRunFullCleanup, object: nil)
+                return "On it — watch me sweep!"
+            })
+        }
+        return """
+        Found \(items.count) dev-junk locations totaling \
+        \(FileSystemUtils.formatBytes(total)). Largest: \(topNames).
+        """
+    }
+}
+
+// MARK: - Caches
+
+@available(macOS 26.0, *)
+struct AnalyzeCachesTool: Tool {
+    let name = "analyze_caches"
+    let description = """
+    Scan user and system caches across ~/Library/Caches and similar. Use when \
+    the user asks about caches, temp files, app caches, "freshen up", etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        let scanner = await CacheScanner()
+        await scanner.scan()
+        let items = await scanner.items
+        let total = await scanner.totalSize
+        if items.isEmpty {
+            return "No reclaimable caches found."
+        }
+        let topNames = items.prefix(4).map { "\($0.displayName) (\(FileSystemUtils.formatBytes($0.sizeBytes)))" }
+            .joined(separator: ", ")
+        await MainActor.run {
+            AIAssistantTools.push(AIChatAction(
+                label: "Clean now · \(FileSystemUtils.formatBytes(total))",
+                systemImage: "externaldrive.badge.minus"
+            ) {
+                NotificationCenter.default.post(name: .macbroomRunFullCleanup, object: nil)
+                return "On it — watch me sweep!"
+            })
+        }
+        return """
+        Found \(items.count) cache items totaling \
+        \(FileSystemUtils.formatBytes(total)). Largest: \(topNames).
+        """
+    }
+}
+
+// MARK: - Duplicates
+
+@available(macOS 26.0, *)
+struct FindDuplicatesTool: Tool {
+    let name = "find_duplicates"
+    let description = """
+    Find bit-identical duplicate files (SHA-256) in the user's home directory. \
+    Use this when the user asks about duplicates, "same file twice", "wasted \
+    copies", etc. This can take a while — warn the user it's slow.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        let finder = await DuplicateFinder()
+        await finder.scan()
+        let groups = await finder.groups
+        let waste = await finder.totalWaste
+        if groups.isEmpty {
+            return "No duplicate files found."
+        }
+        return """
+        Found \(groups.count) duplicate groups, reclaimable: \
+        \(FileSystemUtils.formatBytes(waste)). Open the Duplicates section to pick which copies to remove.
+        """
+    }
+}
+
+// MARK: - Trigger the apple character
+
+/// Triggers the full SmartScan + cleanup with the apple character animation.
+@available(macOS 26.0, *)
+struct CleanMyMacTool: Tool {
+    let name = "clean_my_mac"
+    let description = """
+    Run a full cleanup of the user's Mac: scan caches + dev junk and remove \
+    everything. The apple character on the Home scene will visibly do the work — \
+    walking around, sweeping with the broom, dunking trash in the bin, then \
+    sitting on the chair with a coke. Use this when the user says "clean my \
+    Mac", "clean up", "limpia mi mac", "do it now", etc. Always prefer this \
+    over individual cache/devjunk cleans when the user just wants things gone.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .macbroomRunFullCleanup, object: nil)
+        }
+        return "On it — watch me sweep your Mac 🧹"
+    }
+}
+
+/// Make the apple put on DJ headphones, pull out an iPod, and dance.
+@available(macOS 26.0, *)
+struct MakeAppleDanceTool: Tool {
+    let name = "make_apple_dance"
+    let description = """
+    Make the apple character pull out an iPod, put on DJ headphones, and dance \
+    in place for a few seconds. Use when the user asks the apple to dance, \
+    listen to music, vibe, put music on, etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .macbroomMakeAppleDance, object: nil)
+        }
+        return "🎵 Putting on the headphones — let's vibe."
+    }
+}
+
+/// Make the apple do a 360° spin breakdance animation.
+@available(macOS 26.0, *)
+struct MakeAppleBreakdanceTool: Tool {
+    let name = "make_apple_breakdance"
+    let description = """
+    Make the apple character do a full breakdance — windmill spin on the floor, \
+    multiple rotations. Use when the user explicitly asks for breakdance, \
+    spin, b-boy moves, etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .macbroomMakeAppleBreakdance, object: nil)
+        }
+        return "BREAKDANCE TIME 🕺 watch this"
+    }
+}
+
+/// Turn the apple into Spider-Man — suit on, web shot, climb to ceiling, drop down.
+@available(macOS 26.0, *)
+struct MakeAppleSpidermanTool: Tool {
+    let name = "make_apple_spiderman"
+    let description = """
+    Transform the apple character into Spider-Man: he puts on a red and blue \
+    suit, shoots a web up to the ceiling with a 'thwip!', climbs up the web, \
+    hangs there, then drops back down. Use when the user asks for spiderman, \
+    spider, web, climb the ceiling, swing, superhero, "be spidey", etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .macbroomMakeAppleSpiderman, object: nil)
+        }
+        return "🕷️ Thwip! With great power…"
+    }
+}
+
+// MARK: - Disk info
+
+@available(macOS 26.0, *)
+struct GetDiskInfoTool: Tool {
+    let name = "get_disk_info"
+    let description = """
+    Return current disk usage: total capacity, used space, available space, and \
+    the largest categories. Use when the user asks "what's eating my disk?", \
+    "how full am I?", "disk usage", etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        let scanner = await StorageScanner()
+        await scanner.scan()
+        let total = await scanner.totalBytes
+        let avail = await scanner.availableBytes
+        let used = await scanner.usedBytes
+        let usages = await scanner.usages
+        let topCats = usages.prefix(4).map {
+            "\($0.category.rawValue): \(FileSystemUtils.formatBytes($0.sizeBytes))"
+        }.joined(separator: ", ")
+        return """
+        Disk: \(FileSystemUtils.formatBytes(used)) used / \
+        \(FileSystemUtils.formatBytes(total)) total (\
+        \(FileSystemUtils.formatBytes(avail)) free). Largest categories: \(topCats).
+        """
+    }
+}
+
+#endif

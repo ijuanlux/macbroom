@@ -79,22 +79,22 @@ func renderBackground(scale: CGFloat) -> NSImage {
              x: 40, y: 64,
              font: NSFont.systemFont(ofSize: 32, weight: .bold),
              color: NSColor(red: 0.13, green: 0.09, blue: 0.05, alpha: 1))
-    drawText("v0.3.0 · free + open-source mac cleaner",
+    drawText("v0.4.0 · on-device AI · open-source mac cleaner",
              x: 42, y: 86,
              font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
              color: NSColor(red: 0.40, green: 0.35, blue: 0.30, alpha: 1))
 
     // Feature bullets
     let bullets: [(String, String, NSColor)] = [
-        ("Smart Scan",   "caches · dev junk · large files · duplicates",
+        ("Ask MacBroom", "on-device AI assistant — 100% local, no cloud",
             NSColor(red: 0.40, green: 0.74, blue: 0.36, alpha: 1)),
-        ("Uninstaller",  "apps + every leftover trace they leave behind",
+        ("Smart Scan",   "caches · dev junk · large files · duplicates",
             NSColor(red: 0.18, green: 0.56, blue: 0.86, alpha: 1)),
-        ("Privacy",      "recent files, QuickLook thumbs, mail downloads",
+        ("Uninstaller",  "apps + every leftover trace they leave behind",
             NSColor(red: 0.61, green: 0.34, blue: 0.71, alpha: 1)),
-        ("Disk Explorer","sunburst view + drop folders on the Dock icon",
+        ("Privacy",      "recent files, QuickLook thumbs, mail downloads",
             NSColor(red: 0.96, green: 0.55, blue: 0.18, alpha: 1)),
-        ("Power tools",  "Hacker Mode · ⌘K palette · menu bar widget",
+        ("Pixel mascot", "watches, sweeps, dances, breakdances, web-swings 🕸️",
             NSColor(red: 0.91, green: 0.30, blue: 0.27, alpha: 1)),
     ]
     var by: CGFloat = 130
