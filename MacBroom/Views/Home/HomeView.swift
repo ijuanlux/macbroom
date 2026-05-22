@@ -1,5 +1,22 @@
 import SwiftUI
 
+private struct DebrisPiece: Identifiable {
+    let id = UUID()
+    var position: CGPoint
+    var velocity: CGVector
+    let color: Color
+    let size: CGFloat
+    var rotation: Double
+    let rotationSpeed: Double
+    var opacity: Double
+}
+
+private struct HadoukenFlash {
+    let position: CGPoint
+    var scale: CGFloat = 0.4
+    var opacity: Double = 1
+}
+
 private struct TrashPlacement: Identifiable, Hashable {
     let id = UUID()
     let sprite: [[Int]]
@@ -55,6 +72,13 @@ struct HomeView: View {
     @State private var isSpiderman: Bool = false
     @State private var spiderClimb: CGFloat = 0       // 0 = floor, 1 = ceiling
     @State private var webVisible: Bool = false
+    @State private var isRyu: Bool = false
+    @State private var hadoukenPosition: CGPoint? = nil
+    @State private var debris: [DebrisPiece] = []
+    @State private var debrisTimer: Timer?
+    @State private var hadoukenFlash: HadoukenFlash? = nil
+    @State private var visibleAIMessageId: UUID? = nil
+    @State private var aiBubbleHideTask: Task<Void, Never>? = nil
     @AppStorage("macbroom.tutorialSeen") private var tutorialSeen: Bool = false
     private let chairXRatio: CGFloat = 0.42
 
@@ -65,6 +89,12 @@ struct HomeView: View {
         "time for a sip",
         "MacBroom out.",
         "rest day earned",
+        "lowkey iconic",
+        "no notes",
+        "ate that ngl",
+        "sit + sip 😎",
+        "this is the dream",
+        "best part of the day fr",
     ]
 
     private let musicMessages = [
@@ -74,6 +104,10 @@ struct HomeView: View {
         "lemme cook 🎶",
         "1977 hits diff",
         "💿 mode",
+        "vibes on max",
+        "the apple is on the ones and twos",
+        "🎧 do not disturb",
+        "spinning records bro",
     ]
 
     private let burpMessages = [
@@ -86,6 +120,10 @@ struct HomeView: View {
         "uffffff",
         "💨 excuse me",
         "yeah baby",
+        "*sips noisily*",
+        "BLEEEEP",
+        "respectfully — burp",
+        "🫧",
     ]
 
     private let pixelScale: CGFloat = 6
@@ -96,25 +134,65 @@ struct HomeView: View {
     private let canMouthYRatio: CGFloat = 0.70
 
     private let idleMessages = [
-        "uff this mac is full of trash",
-        "smart scan me bro",
-        "imagine 50 GB of node_modules",
+        "uff this mac is BUSTED",
+        "yo bro, smart scan me",
+        "node_modules be like 'no thx i live here'",
         "ready when you are 😎",
-        "bored. clean me.",
-        "tap me for the magic",
+        "tap. clean. vibe. repeat.",
         "i was built different",
         "wanna sweep something?",
+        "your downloads folder is sus",
+        "the apple is bored. the apple wants to clean.",
+        "imagine 60 GB of node_modules…",
+        "if I clean this you owe me a coke",
+        "tap me bro im built different",
+        "real ones tap the apple",
+        "lowkey need to scan rn",
+        "no cap, you got junk",
+        "respectfully — your trash is BAD",
+        "fr fr scan me",
+        "POV: a clean mac",
+        "vibe check: failed (mac is dirty)",
+        "skill issue ngl, lemme fix it",
+        "tap once. magic happens.",
+        "we're so back when you tap me",
+        "spotless? in this economy?",
+        "i FEEL the bytes bro",
+        "my broom is itching",
+        "what if i told you… you have duplicates",
+        "🧹 ready",
+        "tap me i dare you",
     ]
     private let cleaningMessages = [
         "sweep sweep sweep",
-        "byebye trash",
+        "byebye trash 👋",
+        "yeet",
+        "into the void 🕳️",
         "delete delete delete",
+        "shredded",
+        "BAM. gone.",
+        "out of my house",
+        "evicted",
         "almost done…",
+        "rip lil bro",
+        "ate that",
+        "next 👉",
+        "nom nom",
     ]
     private let doneMessages = [
         "we did it 🧹",
         "feels lighter already",
         "next round?",
+        "huge W bro",
+        "spotless. iconic.",
+        "easy money",
+        "DUSTED ✨",
+        "we ate, no crumbs",
+        "lighter than a feather",
+        "boom. clean.",
+        "look at us 🧼",
+        "yeah baby",
+        "say less",
     ]
     private let overflowMessages = [
         "damn it, again",
@@ -122,6 +200,13 @@ struct HomeView: View {
         "this stuff multiplies",
         "i need a bigger can",
         "the trash gods hate me",
+        "bro the trash respawns",
+        "this is bullying",
+        "i thought we cleaned this",
+        "WHY",
+        "BFFR",
+        "rip my broom",
+        "the bytes are inside the house",
     ]
 
     var body: some View {
@@ -144,6 +229,9 @@ struct HomeView: View {
                 if hasCoke && isSitting {
                     cokeView(sceneSize: geo.size)
                 }
+                hadoukenOverlay(sceneSize: geo.size)
+                debrisOverlay(sceneSize: geo.size)
+                hadoukenFlashOverlay
                 aiSpeechBubbleView(sceneSize: geo.size)
                 tutorialHintView(sceneSize: geo.size)
                 statusOverlay(sceneSize: geo.size)
@@ -172,6 +260,12 @@ struct HomeView: View {
         .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleSpiderman)) { _ in
             Task { await goSpiderman() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .macbroomMakeAppleRyu)) { _ in
+            Task { await goRyu() }
+        }
+        .onChange(of: aiAssistant.messages.count) { _, _ in
+            refreshAIBubble()
+        }
     }
 
     // MARK: - Background
@@ -196,19 +290,23 @@ struct HomeView: View {
             window
                 .position(x: size.width * 0.80, y: size.height * 0.27)
 
-            // Lower band: retro music + sci-fi posters (5 + sticky note)
+            // Lower band: retro music + sci-fi + arcade posters (7 + sticky note)
             vPoster
-                .position(x: size.width * 0.15, y: size.height * 0.50)
+                .position(x: size.width * 0.10, y: size.height * 0.50)
+            pacmanPoster
+                .position(x: size.width * 0.21, y: size.height * 0.49)
             acdcPoster
-                .position(x: size.width * 0.27, y: size.height * 0.49)
+                .position(x: size.width * 0.32, y: size.height * 0.51)
             madonnaPoster
-                .position(x: size.width * 0.39, y: size.height * 0.51)
+                .position(x: size.width * 0.43, y: size.height * 0.49)
+            sf2Poster
+                .position(x: size.width * 0.54, y: size.height * 0.51)
             etPoster
-                .position(x: size.width * 0.51, y: size.height * 0.49)
+                .position(x: size.width * 0.65, y: size.height * 0.49)
             bttfPoster
-                .position(x: size.width * 0.63, y: size.height * 0.51)
+                .position(x: size.width * 0.76, y: size.height * 0.51)
             stickyNote
-                .position(x: size.width * 0.74, y: size.height * 0.50)
+                .position(x: size.width * 0.86, y: size.height * 0.50)
 
             // Floor furniture
             bookshelf
@@ -560,6 +658,101 @@ struct HomeView: View {
         .shadow(color: .black.opacity(0.25), radius: 3, y: 2)
     }
 
+    /// Pac-Man arcade poster — black background with yellow Pac, red ghost,
+    /// pellets between them, and a high-score line at the bottom.
+    private var pacmanPoster: some View {
+        let pacYellow = Color(red: 0.99, green: 0.85, blue: 0.10)
+        let ghostRed  = Color(red: 0.92, green: 0.20, blue: 0.20)
+        return ZStack {
+            Rectangle()
+                .fill(Color.black)
+                .frame(width: 56, height: 76)
+            VStack(spacing: 4) {
+                Text("PAC-MAN")
+                    .font(.system(size: 7, weight: .heavy, design: .monospaced))
+                    .kerning(0.6)
+                    .foregroundStyle(pacYellow)
+                    .padding(.top, 5)
+                Spacer(minLength: 0)
+                HStack(spacing: 3) {
+                    PacManShape()
+                        .fill(pacYellow)
+                        .frame(width: 18, height: 18)
+                    HStack(spacing: 2) {
+                        ForEach(0..<3, id: \.self) { _ in
+                            Circle().fill(pacYellow).frame(width: 2.5, height: 2.5)
+                        }
+                    }
+                    ZStack {
+                        GhostShape()
+                            .fill(ghostRed)
+                            .frame(width: 12, height: 14)
+                        HStack(spacing: 1.5) {
+                            Circle().fill(.white).frame(width: 3, height: 3)
+                            Circle().fill(.white).frame(width: 3, height: 3)
+                        }
+                        .offset(y: -2)
+                    }
+                }
+                Spacer(minLength: 0)
+                Text("1UP   9999")
+                    .font(.system(size: 5, weight: .black, design: .monospaced))
+                    .kerning(0.4)
+                    .foregroundStyle(pacYellow)
+                    .padding(.bottom, 5)
+            }
+            .frame(width: 56, height: 76)
+        }
+        .frame(width: 56, height: 76)
+        .clipped()
+        .rotationEffect(.degrees(2))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 2)
+    }
+
+    /// Street Fighter II poster — red gradient with stacked title and
+    /// "WORLD WARRIOR" subtitle.
+    private var sf2Poster: some View {
+        let sfYellow = Color(red: 0.99, green: 0.88, blue: 0.20)
+        return ZStack {
+            LinearGradient(
+                colors: [
+                    Color(red: 0.95, green: 0.20, blue: 0.10),
+                    Color(red: 0.62, green: 0.06, blue: 0.04)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(width: 56, height: 76)
+
+            VStack(spacing: -2) {
+                Text("STREET")
+                    .font(.system(size: 9, weight: .black, design: .serif))
+                    .foregroundStyle(sfYellow)
+                    .shadow(color: .black.opacity(0.5), radius: 0.8)
+                    .padding(.top, 5)
+                Text("FIGHTER")
+                    .font(.system(size: 8, weight: .black, design: .serif))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.5), radius: 0.8)
+                Text("II")
+                    .font(.system(size: 28, weight: .black, design: .serif))
+                    .foregroundStyle(sfYellow)
+                    .shadow(color: .black, radius: 1)
+                    .padding(.top, 1)
+                Spacer(minLength: 0)
+                Text("WORLD WARRIOR")
+                    .font(.system(size: 4.5, weight: .heavy, design: .monospaced))
+                    .kerning(0.5)
+                    .foregroundStyle(.white.opacity(0.88))
+                    .padding(.bottom, 5)
+            }
+            .frame(width: 56, height: 76)
+        }
+        .frame(width: 56, height: 76)
+        .clipped()
+        .rotationEffect(.degrees(-2))
+        .shadow(color: .black.opacity(0.25), radius: 3, y: 2)
+    }
+
     /// Hand-written yellow sticky note pinned to the wall.
     private var stickyNote: some View {
         ZStack {
@@ -877,7 +1070,11 @@ struct HomeView: View {
         let spiderYOffset: CGFloat = -spiderClimb * max(0, baseCharY - ceilingY)
         let charX = charXRatio * sceneSize.width + sitXOffset + danceOffset
         let charY = baseCharY + sitYOffset + spiderYOffset
-        let palette = isSpiderman ? CharacterPalette.spiderman : CharacterPalette.colors
+        let palette: [Color] = {
+            if isSpiderman { return CharacterPalette.spiderman }
+            if isRyu       { return CharacterPalette.ryu }
+            return CharacterPalette.colors
+        }()
         return ZStack(alignment: .topLeading) {
             // Broom on the back side (opposite of facing) — visible even when carrying.
             if holdingBroom {
@@ -892,6 +1089,13 @@ struct HomeView: View {
                                 palette: CharacterPalette.colors,
                                 scale: pixelScale)
                         .offset(x: -pixelScale * 2, y: pixelScale * 4)
+                        .transition(.opacity)
+                }
+                if isRyu {
+                    PixelSprite(pixels: walkFrame == 0 ? RyuSprites.headbandA : RyuSprites.headbandB,
+                                palette: CharacterPalette.colors,
+                                scale: pixelScale)
+                        .offset(x: 0, y: pixelScale * 4)
                         .transition(.opacity)
                 }
             }
@@ -1151,15 +1355,37 @@ struct HomeView: View {
         }
     }
 
-    /// The most recent assistant message, or "thinking…" while a response is in flight.
+    /// The currently-visible bubble — thinking dots while in flight, otherwise
+    /// the assistant message tagged in `visibleAIMessageId`. Goes nil after
+    /// `aiBubbleHideTask` fires, length-scaled per message.
     private var currentAIBubble: (text: String, isThinking: Bool)? {
-        if aiAssistant.isThinking {
-            return ("", true)
+        if aiAssistant.isThinking { return ("", true) }
+        guard let id = visibleAIMessageId,
+              let msg = aiAssistant.messages.first(where: { $0.id == id }) else {
+            return nil
         }
-        if let last = aiAssistant.messages.last(where: { $0.role == .assistant }) {
-            return (last.content, false)
+        return (msg.content, false)
+    }
+
+    /// Called when the AI assistant publishes a new message. Resets the
+    /// auto-hide timer and schedules a fresh dismissal proportional to the
+    /// text length (8s for one-liners, capped at 22s for long replies).
+    private func refreshAIBubble() {
+        aiBubbleHideTask?.cancel()
+        guard let last = aiAssistant.messages.last(where: { $0.role == .assistant }) else {
+            visibleAIMessageId = nil
+            return
         }
-        return nil
+        visibleAIMessageId = last.id
+        let duration = min(22.0, max(8.0, 6.0 + Double(last.content.count) * 0.055))
+        aiBubbleHideTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            if !Task.isCancelled, visibleAIMessageId == last.id {
+                withAnimation(.easeIn(duration: 0.35)) {
+                    visibleAIMessageId = nil
+                }
+            }
+        }
     }
 
     // MARK: - Status overlay
@@ -1237,6 +1463,8 @@ struct HomeView: View {
         danceTimer?.invalidate()
         musicTask?.cancel()
         hintTimer?.invalidate()
+        debrisTimer?.invalidate()
+        aiBubbleHideTask?.cancel()
     }
 
     private func startWalkAnimation() {
@@ -1594,6 +1822,259 @@ struct HomeView: View {
         speak("yeah baby", duration: 2.0)
     }
 
+    /// Ryu sequence — karate gi + headband, walks to each piece of trash and
+    /// fires a Hadouken energy ball that obliterates it on contact.
+    private func goRyu() async {
+        cancelMusicBreakIfActive()
+        await MainActor.run {
+            isSitting = false
+            isRyu = true
+        }
+        speak("HEADBAND ON 🥋", duration: 1.8)
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        // Refresh visual trash if the floor's empty so there's stuff to blast.
+        await MainActor.run {
+            if trash.allSatisfy({ $0.state != .onFloor }) {
+                trash = HomeView.defaultTrash()
+                inCanCount = 0
+            }
+        }
+
+        let targets = trash.enumerated()
+            .filter { $0.element.state == .onFloor }
+            .sorted { $0.element.baseXRatio < $1.element.baseXRatio }
+            .prefix(6)
+
+        let shouts = ["HADOUKEN! 🔥", "SHORYUKEN! 🌪️", "TATSUMAKI!", "HADOUKEN! 🔥", "WATAH!", "OWATA"]
+
+        for (i, (idx, item)) in targets.enumerated() {
+            // Approach the target — stop 12% before it so the projectile has room to fly.
+            let target = item.baseXRatio
+            let approach = target > charXRatio
+                ? max(0.18, target - 0.12)
+                : min(0.82, target + 0.12)
+            await walkAndWait(to: approach, duration: 0.55)
+            await MainActor.run {
+                facing = target > charXRatio ? 1 : -1
+            }
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            speak(shouts[i % shouts.count], duration: 1.2)
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            await fireHadouken(atXRatio: target, hitTrashIdx: idx)
+        }
+
+        speak("you should not have done that.", duration: 2.5)
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.4)) { isRyu = false }
+        }
+    }
+
+    /// Fires an energy ball from the apple's hand to the target trash.
+    /// On contact: a white flash, a burst of colored debris that bounces
+    /// around the room with gravity, and the trash is gone (state → .inCan).
+    private func fireHadouken(atXRatio targetX: CGFloat, hitTrashIdx: Int) async {
+        guard let geo = currentSceneSize else { return }
+        let charSpriteHeight = CGFloat(AppleSprites.idle.count) * pixelScale
+        let floorY = geo.height - geo.height * floorHeightRatio
+        let charCenterY = floorY - charSpriteHeight / 2 + pixelScale * 2
+        let startX = charXRatio * geo.width + facing * pixelScale * 11
+        let y = charCenterY
+        let endX = targetX * geo.width
+
+        await MainActor.run {
+            withAnimation(.easeIn(duration: 0.18)) {
+                hadoukenPosition = CGPoint(x: startX, y: y)
+            }
+        }
+        try? await Task.sleep(nanoseconds: 180_000_000)
+
+        let frames = 18
+        for i in 1...frames {
+            let t = CGFloat(i) / CGFloat(frames)
+            let x = startX + (endX - startX) * t
+            await MainActor.run { hadoukenPosition = CGPoint(x: x, y: y) }
+            try? await Task.sleep(nanoseconds: 22_000_000)
+        }
+
+        // IMPACT — flash, debris, trash gone
+        let impactPoint = CGPoint(x: endX, y: y)
+        await MainActor.run {
+            hadoukenPosition = nil
+            spawnFlash(at: impactPoint)
+            spawnDebris(at: impactPoint,
+                        sprite: trash[hitTrashIdx].sprite,
+                        sceneSize: geo)
+            trash[hitTrashIdx].state = .inCan
+            inCanCount += 1
+        }
+        try? await Task.sleep(nanoseconds: 280_000_000)
+    }
+
+    // MARK: - Hadouken impact effects
+
+    private func spawnFlash(at point: CGPoint) {
+        hadoukenFlash = HadoukenFlash(position: point)
+        withAnimation(.easeOut(duration: 0.35)) {
+            hadoukenFlash?.scale = 5.5
+            hadoukenFlash?.opacity = 0
+        }
+        Timer.scheduledTimer(withTimeInterval: 0.42, repeats: false) { _ in
+            Task { @MainActor in hadoukenFlash = nil }
+        }
+    }
+
+    /// Pulls non-transparent / non-outline colors out of the trash sprite to
+    /// give the debris an "of-the-thing" look (banana → yellows, can → reds).
+    private func debrisColors(for sprite: [[Int]]) -> [Color] {
+        var indices: Set<Int> = []
+        for row in sprite {
+            for cell in row {
+                if cell > 1 { indices.insert(cell) }   // skip transparent + outline
+            }
+        }
+        let colors = indices.compactMap { idx -> Color? in
+            guard idx < TrashPalette.colors.count else { return nil }
+            return TrashPalette.colors[idx]
+        }
+        return colors.isEmpty
+            ? [Color(red: 0.85, green: 0.62, blue: 0.32)]
+            : colors
+    }
+
+    private func spawnDebris(at origin: CGPoint, sprite: [[Int]], sceneSize: CGSize) {
+        let palette = debrisColors(for: sprite)
+        let count = 8
+        for _ in 0..<count {
+            let vx = CGFloat.random(in: -190...190)
+            let vy = CGFloat.random(in: -340 ... -120)
+            let size = CGFloat.random(in: 5...9)
+            debris.append(DebrisPiece(
+                position: origin,
+                velocity: CGVector(dx: vx, dy: vy),
+                color: palette.randomElement() ?? .gray,
+                size: size,
+                rotation: 0,
+                rotationSpeed: Double.random(in: -540...540),
+                opacity: 1
+            ))
+        }
+        startDebrisLoopIfNeeded()
+    }
+
+    private func startDebrisLoopIfNeeded() {
+        guard debrisTimer == nil else { return }
+        let dt: CGFloat = 1.0 / 60.0
+        let gravity: CGFloat = 720
+        debrisTimer = Timer.scheduledTimer(withTimeInterval: Double(dt), repeats: true) { _ in
+            Task { @MainActor in
+                guard let sceneSize = currentSceneSize else { return }
+                let floorY = sceneSize.height - sceneSize.height * floorHeightRatio
+                var i = 0
+                while i < debris.count {
+                    var p = debris[i]
+                    p.velocity.dy += gravity * dt
+                    p.position.x += p.velocity.dx * dt
+                    p.position.y += p.velocity.dy * dt
+                    p.rotation += p.rotationSpeed * Double(dt)
+                    p.opacity -= 0.011
+                    // Bounce off floor
+                    if p.position.y >= floorY - 4 {
+                        p.position.y = floorY - 4
+                        p.velocity.dy = -p.velocity.dy * 0.45
+                        p.velocity.dx *= 0.65
+                    }
+                    // Bounce off side walls so pieces stay in the scene
+                    if p.position.x < 8 {
+                        p.position.x = 8; p.velocity.dx = -p.velocity.dx * 0.6
+                    } else if p.position.x > sceneSize.width - 8 {
+                        p.position.x = sceneSize.width - 8
+                        p.velocity.dx = -p.velocity.dx * 0.6
+                    }
+                    if p.opacity <= 0 {
+                        debris.remove(at: i)
+                    } else {
+                        debris[i] = p
+                        i += 1
+                    }
+                }
+                if debris.isEmpty {
+                    debrisTimer?.invalidate()
+                    debrisTimer = nil
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func debrisOverlay(sceneSize: CGSize) -> some View {
+        ZStack {
+            ForEach(debris) { piece in
+                Rectangle()
+                    .fill(piece.color)
+                    .frame(width: piece.size, height: piece.size)
+                    .rotationEffect(.degrees(piece.rotation))
+                    .opacity(piece.opacity)
+                    .position(piece.position)
+            }
+        }
+        .allowsHitTesting(false)
+        .zIndex(46)
+    }
+
+    private var hadoukenFlashOverlay: some View {
+        Group {
+            if let flash = hadoukenFlash {
+                Circle()
+                    .fill(RadialGradient(
+                        colors: [Color.white.opacity(0.95),
+                                 Color(red: 1.0, green: 0.9, blue: 0.4).opacity(0.6),
+                                 Color.white.opacity(0)],
+                        center: .center,
+                        startRadius: 2, endRadius: 32
+                    ))
+                    .frame(width: 60, height: 60)
+                    .scaleEffect(flash.scale)
+                    .opacity(flash.opacity)
+                    .position(flash.position)
+                    .allowsHitTesting(false)
+                    .zIndex(47)
+            }
+        }
+    }
+
+    /// Glowing blue Hadouken energy ball rendered when `hadoukenPosition` is set.
+    @ViewBuilder
+    private func hadoukenOverlay(sceneSize: CGSize) -> some View {
+        if let pos = hadoukenPosition {
+            ZStack {
+                Circle()
+                    .fill(RadialGradient(
+                        colors: [Color(red: 0.55, green: 0.90, blue: 1.0).opacity(0.75),
+                                 Color(red: 0.18, green: 0.55, blue: 0.95).opacity(0.0)],
+                        center: .center,
+                        startRadius: 2, endRadius: 32
+                    ))
+                    .frame(width: 64, height: 64)
+                Circle()
+                    .fill(LinearGradient(
+                        colors: [Color.white,
+                                 Color(red: 0.40, green: 0.78, blue: 1.0)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing
+                    ))
+                    .frame(width: 24, height: 24)
+                    .shadow(color: Color(red: 0.45, green: 0.85, blue: 1.0), radius: 14)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 8, height: 8)
+            }
+            .position(pos)
+            .transition(.scale(scale: 0.4).combined(with: .opacity))
+            .zIndex(45)
+        }
+    }
+
     /// Spider-Man sequence: suit up → web shoot → climb to ceiling → hang →
     /// drop back down. Two climb cycles for extra drama.
     private func goSpiderman() async {
@@ -1757,6 +2238,53 @@ struct HomeView: View {
             TrashPlacement(sprite: TrashSprites.can,      baseXRatio: 0.78),
             TrashPlacement(sprite: TrashSprites.paper,    baseXRatio: 0.84),
         ]
+    }
+}
+
+/// Classic Pac-Man silhouette — full circle minus a 60° wedge for the mouth.
+private struct PacManShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.midX, y: rect.midY))
+        p.addArc(
+            center: CGPoint(x: rect.midX, y: rect.midY),
+            radius: min(rect.width, rect.height) / 2,
+            startAngle: .degrees(30),
+            endAngle: .degrees(330),
+            clockwise: false
+        )
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// Pac-Man ghost silhouette — domed top, wavy bottom (4 humps).
+private struct GhostShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let w = rect.width
+        let h = rect.height
+        let domeRadius = w / 2
+        let domeY = domeRadius
+        p.move(to: CGPoint(x: 0, y: h))
+        p.addLine(to: CGPoint(x: 0, y: domeY))
+        p.addArc(
+            center: CGPoint(x: w / 2, y: domeY),
+            radius: domeRadius,
+            startAngle: .degrees(180),
+            endAngle: .degrees(0),
+            clockwise: false
+        )
+        p.addLine(to: CGPoint(x: w, y: h))
+        // Four wavy humps along the bottom (right-to-left).
+        let dip = h * 0.78
+        p.addLine(to: CGPoint(x: w * 0.83, y: dip))
+        p.addLine(to: CGPoint(x: w * 0.66, y: h))
+        p.addLine(to: CGPoint(x: w * 0.50, y: dip))
+        p.addLine(to: CGPoint(x: w * 0.33, y: h))
+        p.addLine(to: CGPoint(x: w * 0.16, y: dip))
+        p.closeSubpath()
+        return p
     }
 }
 

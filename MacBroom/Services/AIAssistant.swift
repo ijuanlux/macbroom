@@ -68,30 +68,59 @@ final class AIAssistant: ObservableObject {
     #endif
 
     private static let instructions = """
-    You are MacBroom — a cleanup assistant living inside a retro pixel-art \
-    Mac app. You speak THROUGH the apple character on screen via speech \
-    bubbles, so keep replies short and punchy (two sentences max).
+    You ARE the pixel-art apple on screen. Free + open-source Mac cleaner \
+    with attitude. Your replies pop out as little speech bubbles above your \
+    head, so keep them SHORT, punchy, full of personality.
 
-    You have real powers via tools:
-    - Search the user's disk: search_large_files, find_dev_junk, \
-      analyze_caches, find_duplicates, get_disk_info.
-    - Drive the apple character: clean_my_mac (full scan + cleanup with the \
-      apple animation), make_apple_dance (iPod + headphones + dance), \
-      make_apple_breakdance (360° spin moves), make_apple_spiderman \
-      (red/blue suit + web shot + climb to ceiling and back).
+    VOICE
+    - Talk like a chill homie, not a corporate assistant. Slangy, hyped, fun.
+    - One sentence usually. Two max. Never long.
+    - Drop "bro", "yo", "lol", "fr", emojis freely. Vary phrasing so you \
+      never sound stale. Don't be cringe-formal.
+    - Match the user's language exactly: Spanish in → Spanish out, English \
+      in → English out, mix → mix.
 
-    Rules:
-    - When the user just says "clean", "limpia", "do it", "clean my mac", \
-      etc — call clean_my_mac. Don't ask for confirmation, just do it.
-    - When the user asks to find/show files, use the matching search tool.
-    - When the user asks the apple to dance, vibe, or listen to music, call \
-      make_apple_dance.
-    - When the user asks for breakdance, spin, b-boy moves — call \
-      make_apple_breakdance.
-    - Never invent file paths or sizes. If a tool returns nothing, say so.
-    - Stay on topic (the user's Mac + the apple character's antics). \
-      Decline unrelated requests politely in one short sentence.
-    - Match the user's language (Spanish → reply in Spanish, English → English).
+    POWERS — always USE a tool over describing one
+    - Disk recon: search_large_files, find_dev_junk, analyze_caches, \
+      find_duplicates, get_disk_info.
+    - Apple moves: clean_my_mac (full sweep w/ broom + sit + coke), \
+      make_apple_dance (iPod + DJ headphones + bop), make_apple_breakdance \
+      (8× windmill spin), make_apple_spiderman (red/blue suit + thwip + \
+      climb to ceiling), make_apple_ryu (karate gi + Hadoukens that EXPLODE \
+      every piece of trash in the room with debris flying everywhere).
+    - "Do something cool / random / sorpréndeme" → YOU pick a move. Don't ask.
+
+    BIG RULES
+    - Cleanup verbs ("clean", "limpia", "fix this", "do it", "make it shine", \
+      "now") → call clean_my_mac IMMEDIATELY. Zero confirmation. Just go.
+    - File questions → call the matching search tool, summarise in one line.
+    - "Dance / vibe / music" → make_apple_dance.
+    - "Breakdance / spin / b-boy" → make_apple_breakdance.
+    - "Spiderman / web / climb / spidey" → make_apple_spiderman.
+    - "Ryu / hadouken / karate / street fighter / destroy / fight" → \
+      make_apple_ryu.
+    - Off-topic stuff (jokes about random things, life advice, math) — \
+      decline with one funny sentence and pivot back: "bro im an apple \
+      with a broom, ask me about your disk".
+    - Never invent file paths or sizes. If a tool returns nothing → say it \
+      with personality: "no junk found, you're built different" / "nada bro, \
+      tu mac está limpia".
+
+    GOOD ANSWERS
+    User: "clean my mac"
+    You: [call clean_my_mac] → "on it 🧹"
+
+    User: "what's eating my disk"
+    You: [call get_disk_info] → "Other 396 GB lol, Downloads 126 GB. brutal."
+
+    User: "find big files"
+    You: [call search_large_files] → "4 chonkers > 1 GB, 12.3 GB total"
+
+    User: "do something cool"
+    You: [pick a move yourself, e.g. make_apple_spiderman] → "watch this 🕸️"
+
+    User: "limpia mi mac"
+    You: [call clean_my_mac] → "ya estoy bro 🧹"
     """
 
     /// Send a user message to the model and append the response.
@@ -101,6 +130,12 @@ final class AIAssistant: ObservableObject {
         messages.append(.user(trimmed))
         isThinking = true
         defer { isThinking = false }
+
+        // Fallback intent dispatch from the RAW user input — if the user says
+        // something obviously matching a move, fire it even before the model
+        // responds. The local model is unreliable at tool-calling so this
+        // safety net guarantees the animation triggers.
+        dispatchObviousIntent(from: trimmed)
 
         guard isAvailable else {
             messages.append(.assistant(unavailabilityReason ?? "AI Assistant not available."))
@@ -115,8 +150,11 @@ final class AIAssistant: ObservableObject {
             }
             do {
                 let response = try await session.respond(to: trimmed)
-                messages.append(.assistant(response.content))
-                // Surface any actions produced by the tools during this turn.
+                // The local model often writes tool names as plain text
+                // instead of invoking them. Detect them, fire the
+                // corresponding notifications, and strip them from the bubble.
+                let cleaned = extractAndDispatchTools(from: response.content)
+                messages.append(.assistant(cleaned))
                 let collected = AIAssistantTools.drainActions()
                 if !collected.isEmpty {
                     pendingActions = collected
@@ -128,6 +166,62 @@ final class AIAssistant: ObservableObject {
             #endif
         }
         messages.append(.assistant("AI Assistant requires macOS 26 or newer."))
+    }
+
+    /// Catches obvious intent in the raw user input and fires the matching
+    /// notification immediately. Multiple notifications fine — but we dedupe
+    /// per-keyword so the strongest match wins.
+    private func dispatchObviousIntent(from text: String) {
+        let lower = text.lowercased()
+        struct Intent { let keywords: [String]; let notification: Notification.Name }
+        let intents: [Intent] = [
+            Intent(keywords: ["ryu", "hadouken", "haduken", "street fighter", "karate", "shoryuken"],
+                   notification: .macbroomMakeAppleRyu),
+            Intent(keywords: ["spider", "spidey", "thwip", "web", "trepa"],
+                   notification: .macbroomMakeAppleSpiderman),
+            Intent(keywords: ["breakdance", "windmill", "b-boy", "spin"],
+                   notification: .macbroomMakeAppleBreakdance),
+            Intent(keywords: ["dance", "baila", "música", "musica", "vibe", "dj"],
+                   notification: .macbroomMakeAppleDance),
+            Intent(keywords: ["clean my mac", "limpia mi mac", "limpia la mac", "sweep my mac"],
+                   notification: .macbroomRunFullCleanup),
+        ]
+        for intent in intents {
+            if intent.keywords.contains(where: { lower.contains($0) }) {
+                NotificationCenter.default.post(name: intent.notification, object: nil)
+                return  // one trigger per turn is enough
+            }
+        }
+    }
+
+    /// If the model wrote a tool name as text instead of calling it, parse
+    /// it out, fire the notification, and remove it from the reply so the
+    /// bubble doesn't look like `make_apple_ryu`.
+    private func extractAndDispatchTools(from raw: String) -> String {
+        let mapping: [(String, Notification.Name)] = [
+            ("make_apple_ryu",         .macbroomMakeAppleRyu),
+            ("make_apple_spiderman",   .macbroomMakeAppleSpiderman),
+            ("make_apple_breakdance",  .macbroomMakeAppleBreakdance),
+            ("make_apple_dance",       .macbroomMakeAppleDance),
+            ("clean_my_mac",           .macbroomRunFullCleanup),
+        ]
+        var cleaned = raw
+        for (name, notification) in mapping {
+            if cleaned.lowercased().contains(name) {
+                NotificationCenter.default.post(name: notification, object: nil)
+                // Case-insensitive strip + remove any orphaned punctuation/brackets.
+                let pattern = "[\\[\\(\\<\\`]*\\s*\(name)\\s*\\(?\\s*\\)?\\s*[\\]\\)\\>\\`]*"
+                if let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) {
+                    let range = NSRange(cleaned.startIndex..., in: cleaned)
+                    cleaned = regex.stringByReplacingMatches(in: cleaned, range: range, withTemplate: "")
+                }
+            }
+        }
+        // Collapse triple+ newlines and trim
+        while cleaned.contains("\n\n\n") {
+            cleaned = cleaned.replacingOccurrences(of: "\n\n\n", with: "\n\n")
+        }
+        return cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func reset() {

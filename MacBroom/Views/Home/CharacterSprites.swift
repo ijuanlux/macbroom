@@ -37,6 +37,21 @@ enum CharacterPalette {
         Color(red: 0.55, green: 0.55, blue: 0.60),    // 16 ipod silver
     ]
 
+    /// Ryu (Street Fighter) palette: rainbow stripes become white gi with a
+    /// thick black belt running through the mouth row.
+    static let ryu: [Color] = {
+        var c = colors
+        let white = Color(red: 0.96, green: 0.94, blue: 0.90)
+        let belt  = Color(red: 0.12, green: 0.10, blue: 0.06)
+        c[1] = white   // green → white
+        c[2] = white   // yellow → white
+        c[3] = white   // orange → white
+        c[4] = belt    // red row at the waist → black belt
+        c[5] = white   // purple → white
+        c[6] = white   // blue → white
+        return c
+    }()
+
     /// Spider-Man palette: rainbow stripes swapped for alternating red/blue.
     /// Leaf, stem, glasses, legs and shoes stay intact so the apple is still
     /// recognisable through the costume.
@@ -135,6 +150,27 @@ enum HeadphoneSprites {
         [11,15,15,11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11,15,15,11, 0],
         [11,11,11,11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11,11,11,11, 0],
         [0,11,11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,11,11, 0, 0],
+    ]
+}
+
+/// Thin red karate headband worn high on the apple's forehead in Ryu mode.
+/// Two frames so the back-tail flutters while the apple moves. Uses palette
+/// index 15 (red) and 11 (black knot dots).
+enum RyuSprites {
+    /// Calm tail — points roughly straight back.
+    static let headbandA: [[Int]] = [
+        //0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17
+        [0, 0, 0,15,15,15,15,15,15,15,15,15,15,15, 0, 0, 0, 0],
+        [0,15,15,15,11,15,15,15,15,15,15,11,15,15,15,15, 0, 0],
+        [15,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ]
+    /// Mid-flutter — tail kicks down a row.
+    static let headbandB: [[Int]] = [
+        [0, 0, 0,15,15,15,15,15,15,15,15,15,15,15, 0, 0, 0, 0],
+        [0,15,15,15,11,15,15,15,15,15,15,11,15,15,15,15, 0, 0],
+        [0,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [15,15, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     ]
 }
 

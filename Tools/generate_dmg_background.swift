@@ -79,7 +79,7 @@ func renderBackground(scale: CGFloat) -> NSImage {
              x: 40, y: 64,
              font: NSFont.systemFont(ofSize: 32, weight: .bold),
              color: NSColor(red: 0.13, green: 0.09, blue: 0.05, alpha: 1))
-    drawText("v0.4.0 · on-device AI · open-source mac cleaner",
+    drawText("v0.5.0 · on-device AI · open-source mac cleaner",
              x: 42, y: 86,
              font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold),
              color: NSColor(red: 0.40, green: 0.35, blue: 0.30, alpha: 1))

@@ -10,6 +10,7 @@ extension Notification.Name {
     static let macbroomMakeAppleDance    = Notification.Name("macbroom.ai.makeAppleDance")
     static let macbroomMakeAppleBreakdance = Notification.Name("macbroom.ai.makeAppleBreakdance")
     static let macbroomMakeAppleSpiderman  = Notification.Name("macbroom.ai.makeAppleSpiderman")
+    static let macbroomMakeAppleRyu        = Notification.Name("macbroom.ai.makeAppleRyu")
 }
 
 /// Read-only tools exposed to the Foundation Models session.
@@ -44,6 +45,7 @@ enum AIAssistantTools {
             MakeAppleDanceTool(),
             MakeAppleBreakdanceTool(),
             MakeAppleSpidermanTool(),
+            MakeAppleRyuTool(),
         ]
     }
     #endif
@@ -277,6 +279,27 @@ struct MakeAppleSpidermanTool: Tool {
             NotificationCenter.default.post(name: .macbroomMakeAppleSpiderman, object: nil)
         }
         return "🕷️ Thwip! With great power…"
+    }
+}
+
+/// Turn the apple into Ryu and fire Hadoukens at every piece of trash.
+@available(macOS 26.0, *)
+struct MakeAppleRyuTool: Tool {
+    let name = "make_apple_ryu"
+    let description = """
+    Turn the apple into Ryu from Street Fighter: white karate gi + red headband, \
+    then he walks around the room firing Hadouken energy balls that obliterate \
+    each piece of trash on the floor. Use when the user asks for Ryu, Street \
+    Fighter, Hadouken, karate, "destroy the trash", "fight mode", "shoryuken", etc.
+    """
+
+    @Generable struct Arguments {}
+
+    func call(arguments: Arguments) async throws -> String {
+        await MainActor.run {
+            NotificationCenter.default.post(name: .macbroomMakeAppleRyu, object: nil)
+        }
+        return "🥋 HADOUKEN incoming!"
     }
 }
 
